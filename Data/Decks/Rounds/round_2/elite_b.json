@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "deckId": "round_2_elite_b",
+  "name": "第2轮 · 强手 B",
+  "description": "占位：精英对手卡组（同一轮仅此文件与 elite_a 两套轮换）。",
+  "cardIds": [
+    14,
+    13,
+    12,
+    3,
+    3,
+    2,
+    2,
+    1,
+    1,
+    14,
+    0,
+    0
+  ],
+  "opponentLines": {
+    "matchStart": [
+      "这就开始了。"
+    ],
+    "matchVictory": [
+      "整场都是我赢。"
+    ],
+    "matchDefeat": [
+      "这次算你狠……"
+    ],
+    "onDraw": [
+      "又抽一张？"
+    ],
+    "roundWin": [
+      "这局我先拿下。"
+    ],
+    "roundLose": [
+      "啧，失手了。"
+    ]
+  }
+}

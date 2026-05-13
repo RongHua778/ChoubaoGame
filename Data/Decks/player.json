@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "deckId": "player",
+  "name": "玩家卡组",
+  "description": "远征玩家牌库；cardIds 对应 Data/cards.json 的 id；数字 0 表示炸弹（使用卡表中首张 bomb 类型牌，若无则退回引擎默认炸弹）。",
+  "cardIds": [1, 1, 1, 1, 2, 2, 2, 3, 0, 0, 0]
+}

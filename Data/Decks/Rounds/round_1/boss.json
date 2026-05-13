@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "deckId": "round_1_boss",
+  "name": "第1轮 · 庄家",
+  "description": "占位：本轮终点庄家卡组（仅此一套）。",
+  "cardIds": [
+    3,
+    3,
+    3,
+    2,
+    2,
+    2,
+    1,
+    1,
+    12,
+    13,
+    14,
+    0,
+    0
+  ],
+  "opponentLines": {
+    "matchStart": [
+      "这就开始了。"
+    ],
+    "matchVictory": [
+      "整场都是我赢。"
+    ],
+    "matchDefeat": [
+      "这次算你狠……"
+    ],
+    "onDraw": [
+      "又抽一张？"
+    ],
+    "roundWin": [
+      "这局我先拿下。"
+    ],
+    "roundLose": [
+      "啧，失手了。"
+    ]
+  }
+}

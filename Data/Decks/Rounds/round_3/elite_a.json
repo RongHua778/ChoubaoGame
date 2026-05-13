@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "deckId": "round_3_elite_a",
+  "name": "第3轮 · 强手 A",
+  "description": "占位：精英对手卡组（同一轮仅此文件与 elite_b 两套轮换）。",
+  "cardIds": [
+    3,
+    3,
+    12,
+    13,
+    14,
+    14,
+    2,
+    2,
+    1,
+    1,
+    0,
+    0
+  ],
+  "opponentLines": {
+    "matchStart": [
+      "这就开始了。"
+    ],
+    "matchVictory": [
+      "整场都是我赢。"
+    ],
+    "matchDefeat": [
+      "这次算你狠……"
+    ],
+    "onDraw": [
+      "又抽一张？"
+    ],
+    "roundWin": [
+      "这局我先拿下。"
+    ],
+    "roundLose": [
+      "啧，失手了。"
+    ]
+  }
+}

@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "source": "carddesign.xlsx",
+  "sheet": "全卡表",
+  "cards": [
+    {
+      "id": 1,
+      "unlocked": true,
+      "shopPrice": 2,
+      "baseScore": 1,
+      "effectName": "",
+      "effectDescription": "",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "displayName": "点数 1"
+      }
+    },
+    {
+      "id": 2,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 2,
+      "effectName": "",
+      "effectDescription": "",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "displayName": "点数 2"
+      }
+    },
+    {
+      "id": 3,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 3,
+      "effectName": "",
+      "effectDescription": "",
+      "card": {
+        "type": "score",
+        "value": 3,
+        "displayName": "点数 3"
+      }
+    },
+    {
+      "id": 4,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": -1,
+      "effectName": "埋伏",
+      "effectDescription": "弃置：往对手抽牌堆中放入一枚“临时”炸弹",
+      "card": {
+        "type": "score",
+        "value": -1,
+        "effect": "ambush",
+        "displayName": "埋伏"
+      }
+    },
+    {
+      "id": 5,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 1,
+      "effectName": "复制",
+      "effectDescription": "主动：复制自己队列中的一张卡，具有临时效果",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "copy",
+        "displayName": "复制"
+      }
+    },
+    {
+      "id": 6,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 5,
+      "effectName": "莽夫",
+      "effectDescription": "被动：被抽取时，会立即再抽2张",
+      "card": {
+        "type": "score",
+        "value": 5,
+        "effect": "bruiser",
+        "displayName": "莽夫"
+      }
+    },
+    {
+      "id": 7,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 1,
+      "effectName": "先锋",
+      "effectDescription": "被动：此后抽取的卡获得+1分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "vanguard",
+        "displayName": "先锋"
+      }
+    },
+    {
+      "id": 8,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "小鬼",
+      "effectDescription": "被动：如果是最后一张，则+3分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "imp",
+        "displayName": "小鬼"
+      }
+    },
+    {
+      "id": 9,
+      "unlocked": true,
+      "shopPrice": 9,
+      "baseScore": 2,
+      "effectName": "圣光",
+      "effectDescription": "主动：使队列中其他卡牌获得+1分",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "divineLight",
+        "displayName": "圣光"
+      }
+    },
+    {
+      "id": 10,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "盾牌",
+      "effectDescription": "主动：选择队列中另外一张卡，将其洗回抽牌堆",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "shield",
+        "displayName": "盾牌"
+      }
+    },
+    {
+      "id": 11,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 0,
+      "effectName": "首领",
+      "effectDescription": "被动：队列中每有1个分数低于2的卡牌，则自身+1分",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "chieftain",
+        "displayName": "首领"
+      }
+    },
+    {
+      "id": 12,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 0,
+      "effectName": "偷窃",
+      "effectDescription": "主动：选择对手队列中的一个卡，将其放入自身的队列（弃牌后返回对手弃牌堆）",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "steal",
+        "displayName": "偷窃"
+      }
+    },
+    {
+      "id": 13,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "虚张",
+      "effectDescription": "被动:如果对手的队列数量小于等于3，则自身+2分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "bluff",
+        "displayName": "虚张"
+      }
+    },
+    {
+      "id": 14,
+      "unlocked": true,
+      "shopPrice": 3,
+      "baseScore": 0,
+      "effectName": "恐吓",
+      "effectDescription": "主动：随机弃掉对手队列中的一个卡",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "intimidate",
+        "displayName": "恐吓"
+      }
+    },
+    {
+      "id": 15,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 0,
+      "effectName": "汲取",
+      "effectDescription": "被动：在队列中时，对手每再抽一张，则自身+1分",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "leech",
+        "displayName": "汲取"
+      }
+    },
+    {
+      "id": 16,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 0,
+      "effectName": "洪水",
+      "effectDescription": "主动：双方各随机弃2张牌",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "flood",
+        "displayName": "洪水"
+      }
+    },
+    {
+      "id": 17,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "污染",
+      "effectDescription": "主动：往对手弃牌堆中，加入一张“污染”（具有临时效果，-1分）",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "pollute",
+        "displayName": "污染"
+      }
+    },
+    {
+      "id": 18,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 4,
+      "effectName": "威吓",
+      "effectDescription": "被动：在队列中时，对手每再抽一张，则自身-1分",
+      "card": {
+        "type": "score",
+        "value": 4,
+        "effect": "menace",
+        "displayName": "威吓"
+      }
+    },
+    {
+      "id": 19,
+      "unlocked": true,
+      "shopPrice": 3,
+      "baseScore": 1,
+      "effectName": "怂恿",
+      "effectDescription": "主动：对手立即再抽1张",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "incite",
+        "displayName": "怂恿"
+      }
+    },
+    {
+      "id": 20,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "废土",
+      "effectDescription": "被动：对手队列中每有一张“污染”，则自身+1分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "wasteland",
+        "displayName": "废土"
+      }
+    },
+    {
+      "id": 21,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 2,
+      "effectName": "毒源",
+      "effectDescription": "被动：在队列中时，对手每再抽一张，就往对手弃牌堆中，加入一张“污染”（具有临时效果，-1分）",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "poisonSource",
+        "displayName": "毒源"
+      }
+    }
+  ]
+}
