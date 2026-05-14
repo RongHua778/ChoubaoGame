@@ -21,11 +21,114 @@ const EFFECT_MENACE = "menace";
 const EFFECT_INCITE = "incite";
 const EFFECT_WASTELAND = "wasteland";
 const EFFECT_POISON_SOURCE = "poisonSource";
+const EFFECT_LEAK_SECRETS = "leakSecrets";
 const MAX_HP = 3;
 const WIN_TARGET = 3;
 const QUEUE_LIMIT = 10;
 const QUEUE_COLUMNS = 5;
 const QUEUE_ROWS = 2;
+
+function countOccupiedQueueSlots(side) {
+  if (!side || !side.queue) {
+    return 0;
+  }
+  let n = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    if (side.queue[i]) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function firstEmptyQueueSlot(side) {
+  if (!side || !side.queue) {
+    return -1;
+  }
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    if (!side.queue[i]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function isQueueFull(side) {
+  return firstEmptyQueueSlot(side) < 0;
+}
+
+function getLastOccupiedQueueIndex(side) {
+  if (!side || !side.queue) {
+    return -1;
+  }
+  for (let i = QUEUE_LIMIT - 1; i >= 0; i -= 1) {
+    if (side.queue[i]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function snapshotQueueCardRefs(side) {
+  const s = new Set();
+  if (!side || !side.queue) {
+    return s;
+  }
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = side.queue[i];
+    if (c) {
+      s.add(c);
+    }
+  }
+  return s;
+}
+
+function collectNewQueueCardsSince(side, beforeRefs) {
+  const out = [];
+  if (!side || !side.queue || !beforeRefs) {
+    return out;
+  }
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = side.queue[i];
+    if (c && !beforeRefs.has(c)) {
+      out.push(c);
+    }
+  }
+  return out;
+}
+
+function pickRandomOccupiedQueueIndex(side) {
+  if (!side || !side.queue) {
+    return -1;
+  }
+  const idxs = [];
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    if (side.queue[i]) {
+      idxs.push(i);
+    }
+  }
+  if (idxs.length === 0) {
+    return -1;
+  }
+  return idxs[Math.floor(Math.random() * idxs.length)];
+}
+
+function placeCopyDuplicateInQueue(side, copyIdx, dup) {
+  const q = side.queue;
+  for (let i = copyIdx + 1; i < QUEUE_LIMIT; i += 1) {
+    if (!q[i]) {
+      q[i] = dup;
+      return true;
+    }
+  }
+  const fallback = firstEmptyQueueSlot(side);
+  if (fallback < 0) {
+    return false;
+  }
+  q[fallback] = dup;
+  return true;
+}
+
 const SCORE_CARDS = [1, 1, 1, 2, 2, 2, 3];
 const BOMB_COUNT = 3;
 const AI_DELAY = 850;
@@ -129,95 +232,81 @@ const THEME = {
 const GAME_SYMBOLS = ["○", "△", "□"];
 const EFFECTS = {
   steal: {
-    name: "偷窃",
     trigger: "active",
     description: "主动：选择对手队列中的一个卡，将其放入自己的队列。"
   },
   bluff: {
-    name: "虚张",
     trigger: "passive",
     description: "被动：如果对手的队列数量小于等于 3，则自身 +2 筹码。"
   },
   intimidate: {
-    name: "恐吓",
     trigger: "active",
     description: "主动：随机弃掉对手队列中的一个卡。"
   },
   ambush: {
-    name: "埋伏",
     trigger: "passive",
     description: "弃置：往对手抽牌堆中随机放入一枚临时炸弹。"
   },
   copy: {
-    name: "复制",
     trigger: "active",
     description: "主动：复制己方队列中任一其他牌生成临时复制；若原牌有主动技能，复制后加入队列时将立即询问是否发动。"
   },
   bruiser: {
-    name: "莽夫",
     trigger: "passive",
     description:
       "被动：被抽取后逐张额外抽牌；炸弹引爆造成淘汰后会停止本条强制抽（嵌套莽夫同理）；仅抽到但未因此淘汰则继续抽完本条。再抽到莽夫会再次触发。"
   },
   vanguard: {
-    name: "先锋",
     trigger: "passive",
     description: "被动：此后抽取的卡获得+1分"
   },
   imp: {
-    name: "小鬼",
     trigger: "passive",
     description: "被动：如果是最后一张，则+3分"
   },
   divineLight: {
-    name: "圣光",
     trigger: "active",
     description: "主动：使队列中其他卡牌获得+1分"
   },
   shield: {
-    name: "盾牌",
     trigger: "active",
     description: "主动：选择己方队列中另一张牌，将其随机洗回己方抽牌堆。"
   },
   chieftain: {
-    name: "首领",
     trigger: "passive",
     description: "被动：队列中每有 1 张基础分数低于 2 的记分卡，自身筹码便 +1。"
   },
   leech: {
-    name: "汲取",
     trigger: "passive",
     description: "被动：在队列中时，对手每再抽一张牌，自身筹码便 +1。"
   },
   flood: {
-    name: "洪水",
     trigger: "active",
     description: "主动：双方各随机弃掉至多 2 张队列中的牌（队列不足则尽其所能）。"
   },
   pollute: {
-    name: "污染",
     trigger: "active",
     description: "主动：往对手弃牌堆随机放入一张临时「污染」（−1 分，离开时销毁）。"
   },
   menace: {
-    name: "威吓",
     trigger: "passive",
     description: "被动：在队列中时，对手每再抽一张牌，自身筹码便 −1。"
   },
   incite: {
-    name: "怂恿",
     trigger: "active",
     description: "主动：对手立即再抽一张牌（受停牌、队列上限与牌库限制）。"
   },
   wasteland: {
-    name: "废土",
     trigger: "passive",
     description: "被动：对手队列中每有一张临时污染，自身筹码便 +1。"
   },
   poisonSource: {
-    name: "毒源",
     trigger: "passive",
     description: "被动：在队列中时，对手每再抽一张牌，就往对手弃牌堆加入一张临时污染（−1 分）。"
+  },
+  leakSecrets: {
+    trigger: "passive",
+    description: "被动：对手队列中每有 1 张炸弹，自身筹码便 +3。"
   }
 };
 const PLAYER_STARTING_DECK_FALLBACK = [
@@ -362,6 +451,7 @@ let matchVictoryRewardAt = 0;
 let routeMapEnteredAt = 0;
 let cardsCatalogEntries = null;
 let catalogById = {};
+let catalogDisplayNameToId = {};
 let thiefDeckCardIds = null;
 let thiefDeckOpponentLines = null;
 let playerDeckCardIds = null;
@@ -690,6 +780,27 @@ function attachCatalogMetadataToCard(card, meta) {
   }
 }
 
+/** 与 export_cards 一致：row.card 未带 effect 时按 effectName 补引擎键。 */
+function ensureEngineEffectFromCatalogEffectName(card, effectNameRow) {
+  if (!card || card.type !== CARD_SCORE) {
+    return;
+  }
+  if (card.effect && EFFECTS[card.effect]) {
+    return;
+  }
+  const en = String(effectNameRow || "").trim();
+  if (!en) {
+    return;
+  }
+  if (en === "勾引" || en === "怂恿") {
+    card.effect = EFFECT_INCITE;
+    return;
+  }
+  if (en === "魅魔") {
+    card.effect = EFFECT_LEECH;
+  }
+}
+
 function catalogRowUnlocked(row) {
   if (!row || typeof row !== "object") {
     return false;
@@ -730,6 +841,7 @@ function applyCardsCatalogPayload(data) {
       effectName: row.effectName,
       effectDescription: row.effectDescription
     });
+    ensureEngineEffectFromCatalogEffectName(card, row.effectName);
     return {
       id: row.id,
       unlocked: catalogRowUnlocked(row),
@@ -771,11 +883,95 @@ function getShopCatalogEntries() {
 
 function rebuildCatalogIndex() {
   catalogById = {};
+  catalogDisplayNameToId = {};
   getRewardCatalogEntries().forEach(function (entry) {
-    if (entry && entry.id != null) {
-      catalogById[entry.id] = entry;
+    if (!entry || entry.id == null) {
+      return;
+    }
+    catalogById[entry.id] = entry;
+    if (entry.card && typeof entry.card.displayName === "string") {
+      const dn = entry.card.displayName.trim();
+      if (dn && catalogDisplayNameToId[dn] === undefined) {
+        catalogDisplayNameToId[dn] = entry.id;
+      }
     }
   });
+}
+
+/** deck JSON 内 cardIds 推荐为数字 catalog id（由 export_round1_decks.py 导出）；仍可写「炸弹」或牌面 displayName 作兼容；在 bootstrap finally 中正则为 id。*/
+function resolveDeckCardToken(token) {
+  if (token === null || token === undefined) {
+    return null;
+  }
+  if (typeof token === "number" && !isNaN(token)) {
+    return Math.floor(token);
+  }
+  const s = String(token).trim();
+  if (!s) {
+    return null;
+  }
+  if (s === "炸弹") {
+    return 0;
+  }
+  const asNum = Number(s);
+  if (!isNaN(asNum) && String(Math.trunc(asNum)) === s) {
+    return Math.trunc(asNum);
+  }
+  const byName = catalogDisplayNameToId[s];
+  if (byName != null) {
+    return byName;
+  }
+  return null;
+}
+
+function resolveAllDeckCatalogIds() {
+  function mapSlot(slot) {
+    if (!slot || !Array.isArray(slot.cardIds)) {
+      return;
+    }
+    slot.cardIds = slot.cardIds
+      .map(function (t) {
+        return resolveDeckCardToken(t);
+      })
+      .filter(function (id) {
+        return id !== null && id !== undefined;
+      });
+  }
+
+  if (expeditionRoundDecks) {
+    let r;
+    for (r = 0; r < expeditionRoundDecks.length; r += 1) {
+      const pack = expeditionRoundDecks[r];
+      let k;
+      for (k = 0; k < pack.normals.length; k += 1) {
+        mapSlot(pack.normals[k]);
+      }
+      for (k = 0; k < pack.elites.length; k += 1) {
+        mapSlot(pack.elites[k]);
+      }
+      mapSlot(pack.boss);
+    }
+  }
+
+  if (thiefDeckCardIds && thiefDeckCardIds.length > 0) {
+    thiefDeckCardIds = thiefDeckCardIds
+      .map(function (t) {
+        return resolveDeckCardToken(t);
+      })
+      .filter(function (id) {
+        return id !== null && id !== undefined;
+      });
+  }
+
+  if (playerDeckCardIds && playerDeckCardIds.length > 0) {
+    playerDeckCardIds = playerDeckCardIds
+      .map(function (t) {
+        return resolveDeckCardToken(t);
+      })
+      .filter(function (id) {
+        return id !== null && id !== undefined;
+      });
+  }
 }
 
 const OPPONENT_LINE_CATEGORY_KEYS = ["matchStart", "matchVictory", "matchDefeat", "onDraw", "roundWin", "roundLose"];
@@ -851,14 +1047,7 @@ function applyThiefDeckPayload(data) {
 
   thiefDeckOpponentLines = normalizeOpponentLines(data.opponentLines);
 
-  thiefDeckCardIds = data.cardIds
-    .map(function (x) {
-      const n = Number(x);
-      return !isNaN(n) ? n : null;
-    })
-    .filter(function (x) {
-      return x !== null;
-    });
+  thiefDeckCardIds = data.cardIds.slice();
 }
 
 function applyPlayerDeckPayload(data) {
@@ -867,14 +1056,7 @@ function applyPlayerDeckPayload(data) {
     return;
   }
 
-  playerDeckCardIds = data.cardIds
-    .map(function (x) {
-      const n = Number(x);
-      return !isNaN(n) ? n : null;
-    })
-    .filter(function (x) {
-      return x !== null;
-    });
+  playerDeckCardIds = data.cardIds.slice();
 }
 
 function resolveCatalogDeckSlot(id) {
@@ -946,22 +1128,15 @@ function cloneFirstBombCardFromCatalog() {
   return card;
 }
 
-function parseDeckIdsFromPayload(data) {
+function deckCardTokensFromPayload(data) {
   if (!data || !Array.isArray(data.cardIds)) {
     return [];
   }
-  return data.cardIds
-    .map(function (x) {
-      const n = Number(x);
-      return !isNaN(n) ? n : null;
-    })
-    .filter(function (x) {
-      return x !== null;
-    });
+  return data.cardIds.slice();
 }
 
 function parseDeckSlotPayload(data) {
-  const cardIds = parseDeckIdsFromPayload(data);
+  const cardIds = deckCardTokensFromPayload(data);
   let displayName = "";
   if (data && typeof data.name === "string" && data.name.trim()) {
     displayName = data.name.trim();
@@ -1686,9 +1861,10 @@ function notifyOpponentQueuedCardsAfterDraw(drawingSide) {
   }
 
   const passiveSide = getOpponent(drawingSide);
-  passiveSide.queue.forEach(function (card) {
+  for (let qi = 0; qi < QUEUE_LIMIT; qi += 1) {
+    const card = passiveSide.queue[qi];
     if (!card || card.type !== CARD_SCORE) {
-      return;
+      continue;
     }
 
     if (card.effect === EFFECT_LEECH) {
@@ -1702,7 +1878,7 @@ function notifyOpponentQueuedCardsAfterDraw(drawingSide) {
     if (card.effect === EFFECT_POISON_SOURCE) {
       injectPollutionIntoDiscardPile(drawingSide);
     }
-  });
+  }
 
   syncRoundScores();
 }
@@ -1710,7 +1886,7 @@ function notifyOpponentQueuedCardsAfterDraw(drawingSide) {
 function drawCard(side) {
   refillDrawPile(side);
 
-  if (side.queue.length >= QUEUE_LIMIT) {
+  if (isQueueFull(side)) {
     side.stopped = true;
     side.status = "队列已满";
     return null;
@@ -1723,7 +1899,8 @@ function drawCard(side) {
   }
 
   const card = side.drawPile.pop();
-  side.queue.push(card);
+  const slot = firstEmptyQueueSlot(side);
+  side.queue[slot] = card;
 
   if (card.type === CARD_BOMB) {
     syncRoundScores();
@@ -1761,10 +1938,16 @@ function syncRoundScores() {
 }
 
 function calculateRoundScore(side) {
-  return side.queue.reduce(function (sum, card, queueIndex) {
-    card.roundContribution = calculateCardRoundContribution(side, card, queueIndex);
-    return sum + card.roundContribution;
-  }, 0);
+  let sum = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const card = side.queue[i];
+    if (!card) {
+      continue;
+    }
+    card.roundContribution = calculateCardRoundContribution(side, card, i);
+    sum += card.roundContribution;
+  }
+  return sum;
 }
 
 function countVanguardsBeforeIndex(side, queueIndex) {
@@ -1791,19 +1974,19 @@ function calculateCardRoundContribution(side, card, queueIndex) {
   if (typeof card.roundBlessBonus === "number") {
     contribution += card.roundBlessBonus;
   }
-  if (card.effect === EFFECT_BLUFF && getOpponent(side).queue.length <= 3) {
+  if (card.effect === EFFECT_BLUFF && countOccupiedQueueSlots(getOpponent(side)) <= 3) {
     contribution += 2;
   }
 
   contribution += countVanguardsBeforeIndex(side, idx);
 
-  if (card.effect === EFFECT_IMP && idx === side.queue.length - 1) {
+  if (card.effect === EFFECT_IMP && idx === getLastOccupiedQueueIndex(side)) {
     contribution += 3;
   }
 
   if (card.effect === EFFECT_CHIEFTAIN) {
     let lowCount = 0;
-    for (let i = 0; i < side.queue.length; i += 1) {
+    for (let i = 0; i < QUEUE_LIMIT; i += 1) {
       const c = side.queue[i];
       if (c && c.type === CARD_SCORE && typeof c.value === "number" && c.value < 2) {
         lowCount += 1;
@@ -1823,13 +2006,24 @@ function calculateCardRoundContribution(side, card, queueIndex) {
   if (card.effect === EFFECT_WASTELAND) {
     let pollutionCount = 0;
     const opp = getOpponent(side);
-    for (let i = 0; i < opp.queue.length; i += 1) {
+    for (let i = 0; i < QUEUE_LIMIT; i += 1) {
       const c = opp.queue[i];
       if (c && c.tempPollution === true) {
         pollutionCount += 1;
       }
     }
     contribution += pollutionCount;
+  }
+
+  if (card.effect === EFFECT_LEAK_SECRETS) {
+    let bombs = 0;
+    const opp = getOpponent(side);
+    for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+      if (opp.queue[i] && opp.queue[i].type === CARD_BOMB) {
+        bombs += 1;
+      }
+    }
+    contribution += bombs * 3;
   }
 
   return contribution;
@@ -1904,7 +2098,7 @@ function injectTemporaryBombIntoDrawPile(opponentSide) {
   const bomb = cloneCard({ type: CARD_BOMB, value: 0, displayName: "临时炸弹", tempBomb: true });
   const insertAt = pile.length === 0 ? 0 : Math.floor(Math.random() * (pile.length + 1));
   pile.splice(insertAt, 0, bomb);
-  showTip("埋伏：对手抽牌堆被塞入临时炸弹", TIPS_DEFAULT_DURATION_MS);
+  showTip("陷阱：对手抽牌堆被塞入临时炸弹", TIPS_DEFAULT_DURATION_MS);
 }
 
 function triggerAmbushOnDiscard(ownerSide, card) {
@@ -1925,7 +2119,7 @@ function isScoreBruiserCard(card) {
   return !!(card && card.type === CARD_SCORE && card.effect === EFFECT_BRUISER);
 }
 
-function startBruiserDrawSchedule(side, originCard, depth, followKind, queueBeforeSnap) {
+function startBruiserDrawSchedule(side, originCard, depth, followKind, queueBeforeRefs) {
   if (!game || scene !== "playing" || depth > BRUISER_MAX_DEPTH) {
     return false;
   }
@@ -1938,8 +2132,8 @@ function startBruiserDrawSchedule(side, originCard, depth, followKind, queueBefo
     stack: [{ sideId: side.id, remaining: 2, depth: depth }],
     nextAt: Date.now() + DRAW_ANIM_DURATION,
     followKind: followKind,
-    playerQueueBefore: followKind === "player" ? queueBeforeSnap : undefined,
-    aiQueueBefore: followKind === "ai" ? queueBeforeSnap : undefined
+    playerQueueBeforeRefs: followKind === "player" ? queueBeforeRefs : undefined,
+    aiQueueBeforeRefs: followKind === "ai" ? queueBeforeRefs : undefined
   };
   return true;
 }
@@ -1957,13 +2151,13 @@ function finalizeBruiserDrawFollowUp() {
 
   clearBruiserDrawMachine();
 
-  if (m.followKind === "player" && typeof m.playerQueueBefore === "number") {
-    schedulePlayerActiveEffectsAfterDraw(game.player.queue.slice(m.playerQueueBefore));
+  if (m.followKind === "player" && m.playerQueueBeforeRefs) {
+    schedulePlayerActiveEffectsAfterDraw(collectNewQueueCardsSince(game.player, m.playerQueueBeforeRefs));
     return;
   }
 
-  if (m.followKind === "ai" && typeof m.aiQueueBefore === "number") {
-    const chain = game.ai.queue.slice(m.aiQueueBefore).filter(hasActiveEffect);
+  if (m.followKind === "ai" && m.aiQueueBeforeRefs) {
+    const chain = collectNewQueueCardsSince(game.ai, m.aiQueueBeforeRefs).filter(hasActiveEffect);
     if (chain.length > 0) {
       pendingAiActiveEffect = {
         aiEffectChain: chain,
@@ -2002,7 +2196,7 @@ function tickBruiserDrawMachine(now) {
   const frame = m.stack[m.stack.length - 1];
   const side = game[frame.sideId];
 
-  if (!side || side.busted || side.stopped || side.queue.length >= QUEUE_LIMIT) {
+  if (!side || side.busted || side.stopped || isQueueFull(side)) {
     finalizeBruiserDrawFollowUp();
     return false;
   }
@@ -2068,11 +2262,11 @@ function makeTemporaryCopy(sourceCard) {
 function playerHasValidShieldTarget(shieldCard) {
   const q = game.player.queue;
   const si = q.indexOf(shieldCard);
-  if (si < 0 || q.length < 2) {
+  if (si < 0 || countOccupiedQueueSlots(game.player) < 2) {
     return false;
   }
 
-  for (let i = 0; i < q.length; i += 1) {
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
     if (i !== si && q[i]) {
       return true;
     }
@@ -2084,11 +2278,11 @@ function playerHasValidShieldTarget(shieldCard) {
 function playerHasValidCopyTarget(copyCard) {
   const q = game.player.queue;
   const ci = q.indexOf(copyCard);
-  if (ci < 0 || q.length < 2) {
+  if (ci < 0 || countOccupiedQueueSlots(game.player) < 2) {
     return false;
   }
 
-  for (let i = 0; i < q.length; i += 1) {
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
     if (i !== ci && q[i]) {
       return true;
     }
@@ -2119,7 +2313,7 @@ function playerDraw() {
     return;
   }
 
-  const queueBefore = game.player.queue.length;
+  const beforeRefs = snapshotQueueCardRefs(game.player);
   const card = drawCard(game.player);
   if (!card) {
     if (game.player.status === "队列已满") {
@@ -2134,10 +2328,9 @@ function playerDraw() {
   }
 
   triggerDrawEffect(game.player, card);
-  const bruiserPending = startBruiserDrawSchedule(game.player, card, 0, "player", queueBefore);
+  const bruiserPending = startBruiserDrawSchedule(game.player, card, 0, "player", beforeRefs);
   if (!bruiserPending) {
-    const drawnSlice = game.player.queue.slice(queueBefore);
-    schedulePlayerActiveEffectsAfterDraw(drawnSlice);
+    schedulePlayerActiveEffectsAfterDraw(collectNewQueueCardsSince(game.player, beforeRefs));
   }
 }
 
@@ -2199,7 +2392,7 @@ function runAiTurn() {
   }
 
   if (shouldAiDraw()) {
-    const qBefore = game.ai.queue.length;
+    const beforeRefs = snapshotQueueCardRefs(game.ai);
     const card = drawCard(game.ai);
     if (!card) {
       if (scene === "playing") {
@@ -2211,10 +2404,10 @@ function runAiTurn() {
     tryOpponentSpeechCategory("onDraw", OPPONENT_LINE_ON_DRAW_CHANCE);
 
     triggerDrawEffect(game.ai, card);
-    const bruiserPending = startBruiserDrawSchedule(game.ai, card, 0, "ai", qBefore);
+    const bruiserPending = startBruiserDrawSchedule(game.ai, card, 0, "ai", beforeRefs);
 
     if (!bruiserPending) {
-      const chain = game.ai.queue.slice(qBefore).filter(hasActiveEffect);
+      const chain = collectNewQueueCardsSince(game.ai, beforeRefs).filter(hasActiveEffect);
       if (scene === "playing" && chain.length > 0) {
         pendingAiActiveEffect = {
           aiEffectChain: chain,
@@ -2271,7 +2464,7 @@ function resolveActiveEffect(useEffect) {
   }
 
   if (card.effect === EFFECT_STEAL) {
-    if (game.ai.queue.length === 0 || game.player.queue.length >= QUEUE_LIMIT) {
+    if (countOccupiedQueueSlots(game.ai) === 0 || isQueueFull(game.player)) {
       game.player.status = "偷窃无目标";
       openNextPlayerPendingActiveModalOrAdvance();
       return;
@@ -2286,7 +2479,7 @@ function resolveActiveEffect(useEffect) {
   }
 
   if (card.effect === EFFECT_COPY) {
-    if (!playerHasValidCopyTarget(card) || game.player.queue.length >= QUEUE_LIMIT) {
+    if (!playerHasValidCopyTarget(card) || isQueueFull(game.player)) {
       game.player.status = "复制无目标";
       openNextPlayerPendingActiveModalOrAdvance();
       return;
@@ -2310,7 +2503,8 @@ function resolveActiveEffect(useEffect) {
 
   if (card.effect === EFFECT_FLOOD) {
     applyFloodEffect();
-    game.player.status = "洪水！双方各随机弃牌";
+    const floodLabel = resolveEffectDisplayName(card);
+    game.player.status = (floodLabel ? floodLabel + "！" : "") + "双方各随机弃牌";
     openNextPlayerPendingActiveModalOrAdvance();
     return;
   }
@@ -2324,7 +2518,7 @@ function resolveActiveEffect(useEffect) {
 
   if (card.effect === EFFECT_INCITE) {
     if (!applyInciteEffect(game.player)) {
-      game.player.status = game.player.status || "怂恿失败";
+      game.player.status = game.player.status || "勾引失败";
     }
     openNextPlayerPendingActiveModalOrAdvance();
     return;
@@ -2332,14 +2526,14 @@ function resolveActiveEffect(useEffect) {
 
   if (card.effect === EFFECT_SHIELD) {
     if (!playerHasValidShieldTarget(card)) {
-      game.player.status = "盾牌无目标";
+      game.player.status = "回收无目标";
       openNextPlayerPendingActiveModalOrAdvance();
       return;
     }
 
     modal = {
       type: "selectShieldTarget",
-      title: "选择盾牌目标",
+      title: "选择回收目标",
       card: card
     };
     return;
@@ -2349,7 +2543,7 @@ function resolveActiveEffect(useEffect) {
 }
 
 function resolveAiActiveEffect(card) {
-  const skillTipName = EFFECTS[card.effect] ? resolveEffectDisplayName(card) || EFFECTS[card.effect].name : "技能";
+  const skillTipName = EFFECTS[card.effect] ? resolveEffectDisplayName(card) || "技能" : "技能";
   showTip("对手发动了【" + skillTipName + "】");
 
   if (card.effect === EFFECT_STEAL) {
@@ -2387,17 +2581,18 @@ function resolveAiActiveEffect(card) {
     if (targetIndex >= 0) {
       applyShieldEffectFor(game.ai, card, targetIndex);
     } else {
-      game.ai.status = "盾牌无目标";
+      game.ai.status = "回收无目标";
     }
     return;
   }
 
   if (card.effect === EFFECT_FLOOD) {
+    const floodLabel = resolveEffectDisplayName(card);
     if (chooseAiUseFloodNow()) {
       applyFloodEffect();
-      game.ai.status = "洪水！双方各随机弃牌";
+      game.ai.status = (floodLabel ? floodLabel + "！" : "") + "双方各随机弃牌";
     } else {
-      game.ai.status = "洪水：暂无目标";
+      game.ai.status = (floodLabel ? floodLabel + "：" : "") + "暂无目标";
     }
     return;
   }
@@ -2412,7 +2607,7 @@ function resolveAiActiveEffect(card) {
     if (chooseAiUseInciteNow()) {
       applyInciteEffect(game.ai);
     } else {
-      game.ai.status = "怂恿：暂无时机";
+      game.ai.status = "勾引：暂无时机";
     }
     return;
   }
@@ -2433,7 +2628,7 @@ function applyHolyLightEffect(user, sourceCard) {
   }
 
   let hit = 0;
-  for (let i = 0; i < q.length; i += 1) {
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
     const c = q[i];
     if (!c || c === sourceCard || c.type !== CARD_SCORE) {
       continue;
@@ -2451,9 +2646,10 @@ function applyFloodRandomDiscards(side, count, orderBase) {
   let order = orderBase;
   let done = 0;
 
-  while (done < count && side.queue.length > 0) {
-    const idx = Math.floor(Math.random() * side.queue.length);
-    const removed = side.queue.splice(idx, 1)[0];
+  while (done < count && countOccupiedQueueSlots(side) > 0) {
+    const idx = pickRandomOccupiedQueueIndex(side);
+    const removed = side.queue[idx];
+    side.queue[idx] = null;
     discardQueuedCard(side, removed, idx, order, false);
     order += 1;
     done += 1;
@@ -2480,41 +2676,41 @@ function applyInciteEffect(user) {
 
   const opp = getOpponent(user);
   if (!opp || opp.busted) {
-    user.status = "怂恿：对手无法抽牌";
+    user.status = "勾引：对手无法抽牌";
     return false;
   }
 
   if (opp.stopped) {
-    user.status = "怂恿：对手已停牌";
+    user.status = "勾引：对手已停牌";
     return false;
   }
 
-  if (opp.queue.length >= QUEUE_LIMIT) {
-    user.status = "怂恿：对手队列已满";
+  if (isQueueFull(opp)) {
+    user.status = "勾引：对手队列已满";
     return false;
   }
 
   refillDrawPile(opp);
   if (opp.drawPile.length === 0 && opp.discardPile.length === 0) {
-    user.status = "怂恿：对手无牌可抽";
+    user.status = "勾引：对手无牌可抽";
     return false;
   }
 
-  const queueBefore = opp.queue.length;
+  const beforeRefs = snapshotQueueCardRefs(opp);
   const drawn = drawCard(opp);
   if (!drawn) {
-    user.status = "怂恿：未能抽牌";
+    user.status = "勾引：未能抽牌";
     return false;
   }
 
   triggerDrawEffect(opp, drawn);
-  const bruiserPending = startBruiserDrawSchedule(opp, drawn, 0, opp.id === "player" ? "player" : "ai", queueBefore);
+  const bruiserPending = startBruiserDrawSchedule(opp, drawn, 0, opp.id === "player" ? "player" : "ai", beforeRefs);
 
   if (!bruiserPending) {
     if (opp.id === "player") {
-      schedulePlayerActiveEffectsAfterDraw(game.player.queue.slice(queueBefore));
+      schedulePlayerActiveEffectsAfterDraw(collectNewQueueCardsSince(game.player, beforeRefs));
     } else {
-      const chain = game.ai.queue.slice(queueBefore).filter(hasActiveEffect);
+      const chain = collectNewQueueCardsSince(game.ai, beforeRefs).filter(hasActiveEffect);
       if (chain.length > 0) {
         pendingAiActiveEffect = {
           aiEffectChain: chain,
@@ -2524,17 +2720,17 @@ function applyInciteEffect(user) {
     }
   }
 
-  user.status = "怂恿：对手再抽一张";
+  user.status = "勾引：对手再抽一张";
   return true;
 }
 
 function chooseAiUseFloodNow() {
-  return game.player.queue.length + game.ai.queue.length >= 2;
+  return countOccupiedQueueSlots(game.player) + countOccupiedQueueSlots(game.ai) >= 2;
 }
 
 function chooseAiUseInciteNow() {
   const opp = game.player;
-  if (!opp || opp.busted || opp.stopped || opp.queue.length >= QUEUE_LIMIT) {
+  if (!opp || opp.busted || opp.stopped || isQueueFull(opp)) {
     return false;
   }
 
@@ -2552,7 +2748,7 @@ function applyShieldEffectFor(user, shieldCard, targetIndex) {
 
   const q = user.queue;
   const shieldIdx = q.indexOf(shieldCard);
-  if (shieldIdx < 0 || targetIndex < 0 || targetIndex >= q.length || targetIndex === shieldIdx) {
+  if (shieldIdx < 0 || targetIndex < 0 || targetIndex >= QUEUE_LIMIT || targetIndex === shieldIdx) {
     return false;
   }
 
@@ -2561,24 +2757,24 @@ function applyShieldEffectFor(user, shieldCard, targetIndex) {
     return false;
   }
 
-  q.splice(targetIndex, 1);
+  q[targetIndex] = null;
   clearRoundCardState(target);
   shuffleCardIntoDrawPile(user, target);
   syncRoundScores();
-  user.status = "盾牌：已将一张牌洗回抽牌堆";
+  user.status = "回收：已将一张牌洗回抽牌堆";
   return true;
 }
 
 function chooseAiShieldTargetIndex(shieldCard) {
   const q = game.ai.queue;
   const ci = q.indexOf(shieldCard);
-  if (ci < 0 || q.length < 2) {
+  if (ci < 0 || countOccupiedQueueSlots(game.ai) < 2) {
     return -1;
   }
 
   let bestIndex = -1;
   let bestContribution = Infinity;
-  for (let i = 0; i < q.length; i += 1) {
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
     if (i === ci) {
       continue;
     }
@@ -2613,7 +2809,7 @@ function applyShieldEffect(targetIndex) {
   if (
     shieldIdx < 0 ||
     targetIndex < 0 ||
-    targetIndex >= q.length ||
+    targetIndex >= QUEUE_LIMIT ||
     targetIndex === shieldIdx ||
     !q[targetIndex]
   ) {
@@ -2651,7 +2847,7 @@ function applyCopyEffect(targetIndex) {
 
   const q = game.player.queue;
   const copyIdx = q.indexOf(copyCard);
-  if (copyIdx < 0 || targetIndex < 0 || targetIndex >= q.length || targetIndex === copyIdx) {
+  if (copyIdx < 0 || targetIndex < 0 || targetIndex >= QUEUE_LIMIT || targetIndex === copyIdx) {
     openNextPlayerPendingActiveModalOrAdvance();
     return;
   }
@@ -2662,14 +2858,18 @@ function applyCopyEffect(targetIndex) {
     return;
   }
 
-  if (q.length >= QUEUE_LIMIT) {
+  if (isQueueFull(game.player)) {
     showTip("队列已满");
     openNextPlayerPendingActiveModalOrAdvance();
     return;
   }
 
   const dup = makeTemporaryCopy(target);
-  q.splice(copyIdx + 1, 0, dup);
+  if (!placeCopyDuplicateInQueue(game.player, copyIdx, dup)) {
+    showTip("队列已满");
+    openNextPlayerPendingActiveModalOrAdvance();
+    return;
+  }
   syncRoundScores();
   game.player.status = "复制！获得临时复制";
   if (hasActiveEffect(dup)) {
@@ -2681,7 +2881,7 @@ function applyCopyEffect(targetIndex) {
 function applyCopyEffectForAi(ai, copyCard, targetIndex) {
   const q = ai.queue;
   const copyIdx = q.indexOf(copyCard);
-  if (copyIdx < 0 || targetIndex < 0 || targetIndex >= q.length || targetIndex === copyIdx) {
+  if (copyIdx < 0 || targetIndex < 0 || targetIndex >= QUEUE_LIMIT || targetIndex === copyIdx) {
     return false;
   }
 
@@ -2690,12 +2890,14 @@ function applyCopyEffectForAi(ai, copyCard, targetIndex) {
     return false;
   }
 
-  if (q.length >= QUEUE_LIMIT) {
+  if (isQueueFull(ai)) {
     return false;
   }
 
   const dup = makeTemporaryCopy(target);
-  q.splice(copyIdx + 1, 0, dup);
+  if (!placeCopyDuplicateInQueue(ai, copyIdx, dup)) {
+    return false;
+  }
   syncRoundScores();
   ai.status = "复制！获得临时复制";
   if (hasActiveEffect(dup)) {
@@ -2705,13 +2907,14 @@ function applyCopyEffectForAi(ai, copyCard, targetIndex) {
 }
 
 function applyIntimidateEffectFor(user, target) {
-  if (target.queue.length === 0) {
+  if (countOccupiedQueueSlots(target) === 0) {
     user.status = "恐吓无目标";
     return false;
   }
 
-  const index = Math.floor(Math.random() * target.queue.length);
-  const removed = target.queue.splice(index, 1)[0];
+  const index = pickRandomOccupiedQueueIndex(target);
+  const removed = target.queue[index];
+  target.queue[index] = null;
   discardQueuedCard(target, removed, index, 0);
   syncRoundScores();
   user.status = "恐吓！弃掉对手一张牌";
@@ -2719,17 +2922,22 @@ function applyIntimidateEffectFor(user, target) {
 }
 
 function applyStealEffectFor(user, target, index) {
-  if (index < 0 || index >= target.queue.length || user.queue.length >= QUEUE_LIMIT) {
+  if (index < 0 || index >= QUEUE_LIMIT || !target.queue[index] || isQueueFull(user)) {
     user.status = "偷窃无目标";
     return false;
   }
 
-  const stolen = target.queue.splice(index, 1)[0];
-  const targetIndex = user.queue.length;
+  const stolen = target.queue[index];
+  target.queue[index] = null;
+  const targetIndex = firstEmptyQueueSlot(user);
+  if (targetIndex < 0) {
+    user.status = "偷窃无目标";
+    return false;
+  }
   if (!stolen.returnToSideId) {
     stolen.returnToSideId = target.id;
   }
-  user.queue.push(stolen);
+  user.queue[targetIndex] = stolen;
   triggerSlotMoveEffect(target, user, stolen, index, targetIndex);
   syncRoundScores();
   user.status = "偷窃！获得对手一张牌";
@@ -2737,15 +2945,19 @@ function applyStealEffectFor(user, target, index) {
 }
 
 function chooseAiStealTargetIndex() {
-  if (game.player.queue.length === 0 || game.ai.queue.length >= QUEUE_LIMIT) {
+  if (countOccupiedQueueSlots(game.player) === 0 || isQueueFull(game.ai)) {
     return -1;
   }
 
-  let bestIndex = 0;
-  let bestValue = getAiStealTargetValue(game.player.queue[0]);
+  let bestIndex = -1;
+  let bestValue = -Infinity;
 
-  for (let i = 1; i < game.player.queue.length; i += 1) {
-    const value = getAiStealTargetValue(game.player.queue[i]);
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = game.player.queue[i];
+    if (!c) {
+      continue;
+    }
+    const value = getAiStealTargetValue(c);
     if (value > bestValue) {
       bestValue = value;
       bestIndex = i;
@@ -2758,14 +2970,14 @@ function chooseAiStealTargetIndex() {
 function chooseAiCopyTargetIndex(copyCard) {
   const q = game.ai.queue;
   const ci = q.indexOf(copyCard);
-  if (ci < 0 || q.length >= QUEUE_LIMIT) {
+  if (ci < 0 || isQueueFull(game.ai)) {
     return -1;
   }
 
   let bestIndex = -1;
   let bestValue = -Infinity;
 
-  for (let i = 0; i < q.length; i += 1) {
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
     if (i === ci) {
       continue;
     }
@@ -2803,7 +3015,7 @@ function shouldAiDraw() {
   const ai = game.ai;
   const player = game.player;
 
-  if (ai.queue.length >= QUEUE_LIMIT || ai.drawPile.length + ai.discardPile.length === 0) {
+  if (isQueueFull(ai) || ai.drawPile.length + ai.discardPile.length === 0) {
     return false;
   }
 
@@ -2814,7 +3026,7 @@ function shouldAiDraw() {
   const bombRisk = estimateBombRisk(ai);
   const scoreGap = player.roundScore - ai.roundScore;
   const winGap = player.wins - ai.wins;
-  const queuePressure = ai.queue.length / QUEUE_LIMIT;
+  const queuePressure = countOccupiedQueueSlots(ai) / QUEUE_LIMIT;
   const expectedGain = estimateScoreGain(ai);
   const hasHpBuffer = ai.hp > 1;
   const hasFreeRecovery = ai.hp === MAX_HP;
@@ -2835,7 +3047,7 @@ function shouldAiDraw() {
     return true;
   }
 
-  if (ai.queue.length === 0) {
+  if (countOccupiedQueueSlots(ai) === 0) {
     if (hasHpBuffer) {
       return true;
     }
@@ -3016,14 +3228,19 @@ function moveQueuesToDiscard() {
 }
 
 function moveQueue(side, startOrder, deferDiscard) {
-  side.queue.forEach(function (card, index) {
-    discardQueuedCard(side, card, index, startOrder + index, deferDiscard);
-  });
-  const count = side.queue.length;
+  let order = startOrder;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const card = side.queue[i];
+    if (!card) {
+      continue;
+    }
+    discardQueuedCard(side, card, i, order, deferDiscard);
+    order += 1;
+  }
   if (!deferDiscard) {
     side.queue = [];
   }
-  return startOrder + count;
+  return order;
 }
 
 function discardQueuedCard(side, card, queueIndex, animationOrder, deferQueueCommit) {
@@ -3050,7 +3267,7 @@ function commitDeferredDiscardEffect(effect) {
   if (sourceSide) {
     const idx = sourceSide.queue.indexOf(effect.card);
     if (idx >= 0) {
-      sourceSide.queue.splice(idx, 1);
+      sourceSide.queue[idx] = null;
     }
   }
 
@@ -3374,11 +3591,14 @@ function triggerDrawEffect(side, card) {
     return;
   }
 
+  const qi = side.queue.indexOf(card);
+  const slot = qi >= 0 ? qi : 0;
+
   activeEffects.push({
     type: "draw",
     sideId: side.id,
     card: card,
-    queueIndex: Math.max(0, side.queue.length - 1),
+    queueIndex: slot,
     startedAt: Date.now()
   });
 
@@ -3386,7 +3606,7 @@ function triggerDrawEffect(side, card) {
     activeEffects.push({
       type: "bomb",
       sideId: side.id,
-      queueIndex: Math.max(0, side.queue.length - 1),
+      queueIndex: slot,
       lostHeartIndex: side.hp,
       startedAt: Date.now()
     });
@@ -3842,8 +4062,8 @@ function handleBoardInfoTouch(point) {
   return false;
 }
 
-function update() {
-  const now = Date.now();
+function update(frameNow) {
+  const now = frameNow != null ? frameNow : Date.now();
   if (scene === "playing" && game && game.opponentSpeechBubble && now >= game.opponentSpeechBubble.until) {
     game.opponentSpeechBubble = null;
   }
@@ -4885,7 +5105,8 @@ function drawGameSymbol(x, y, size, symbol, color) {
   ctx.restore();
 }
 
-function drawGame(width, height) {
+function drawGame(width, height, frameNow) {
+  const now = frameNow != null ? frameNow : Date.now();
   drawBattleBackground(width, height);
   pileHitAreas = [];
   queueCardHitAreas = [];
@@ -4897,9 +5118,9 @@ function drawGame(width, height) {
   const centerY = aiPanel.y + aiPanel.h + gap;
   const centerH = playerPanel.y - centerY - gap;
 
-  drawSidePanel(game.ai, aiPanel, true);
+  drawSidePanel(game.ai, aiPanel, true, now);
   drawCenterStatus({ x: layout.sideMargin, y: centerY, w: width - layout.sideMargin * 2, h: centerH });
-  drawSidePanel(game.player, playerPanel, false);
+  drawSidePanel(game.player, playerPanel, false, now);
   drawControls(width, height);
 }
 
@@ -5190,7 +5411,7 @@ function drawOpponentSpeechBubbleOverlay(screenW, screenH) {
   ctx.restore();
 }
 
-function drawSidePanel(side, rect, isAi) {
+function drawSidePanel(side, rect, isAi, frameNow) {
   drawBattleSideFrame(rect, isAi);
   drawContestPanelDecor(rect, isAi);
 
@@ -5213,7 +5434,7 @@ function drawSidePanel(side, rect, isAi) {
 
   const cardArea = { x: rect.x + 12, y: rect.y + 64, w: rect.w - 24, h: rect.h - 76 };
   drawContestCardArea(cardArea, isAi);
-  drawQueue(side, cardArea.x + 10, cardArea.y + 12, cardArea.w - 20, cardArea.h - 22);
+  drawQueue(side, cardArea.x + 10, cardArea.y + 12, cardArea.w - 20, cardArea.h - 22, frameNow);
 }
 
 function drawBattleSideFrame(rect, isAi) {
@@ -5367,27 +5588,28 @@ function drawContestCardArea(rect, isAi) {
   ctx.restore();
 }
 
-function drawActiveEffects(width, height) {
+function drawActiveEffects(width, height, frameNow) {
   if (!game || activeEffects.length === 0 || scene !== "playing") {
     return;
   }
 
+  const now = frameNow != null ? frameNow : Date.now();
   activeEffects.forEach(function (effect) {
     if (effect.type === "draw") {
-      drawDrawEffect(effect, width, height);
+      drawDrawEffect(effect, width, height, now);
     } else if (effect.type === "slotMove") {
-      drawSlotMoveEffect(effect, width, height);
+      drawSlotMoveEffect(effect, width, height, now);
     } else if (effect.type === "discard") {
-      drawDiscardEffect(effect, width, height);
+      drawDiscardEffect(effect, width, height, now);
     } else if (effect.type === "bomb") {
-      drawBombEffect(effect, width, height);
+      drawBombEffect(effect, width, height, now);
     }
   });
 }
 
-function drawDrawEffect(effect, width, height) {
-  const now = Date.now();
-  const t = clamp((now - effect.startedAt) / DRAW_ANIM_DURATION, 0, 1);
+function drawDrawEffect(effect, width, height, now) {
+  const tNow = now != null ? now : Date.now();
+  const t = clamp((tNow - effect.startedAt) / DRAW_ANIM_DURATION, 0, 1);
   const eased = 1 - Math.pow(1 - t, 3);
   const pos = getEffectPositions(effect.sideId, effect.queueIndex, width, height);
 
@@ -5404,9 +5626,9 @@ function drawDrawEffect(effect, width, height) {
   drawFloatingMiniCard(effect.card, cx, cy, pos.card.w, pos.card.h, scale, rotation, alpha);
 }
 
-function drawDiscardEffect(effect, width, height) {
-  const now = Date.now();
-  const rawT = (now - effect.startedAt) / DISCARD_ANIM_DURATION;
+function drawDiscardEffect(effect, width, height, now) {
+  const tNow = now != null ? now : Date.now();
+  const rawT = (tNow - effect.startedAt) / DISCARD_ANIM_DURATION;
   if (rawT < 0) {
     return;
   }
@@ -5428,9 +5650,9 @@ function drawDiscardEffect(effect, width, height) {
   drawFloatingMiniCard(effect.card, cx, cy, pos.card.w, pos.card.h, scale, rotation, alpha);
 }
 
-function drawSlotMoveEffect(effect, width, height) {
-  const now = Date.now();
-  const t = clamp((now - effect.startedAt) / SLOT_MOVE_ANIM_DURATION, 0, 1);
+function drawSlotMoveEffect(effect, width, height, now) {
+  const tNow = now != null ? now : Date.now();
+  const t = clamp((tNow - effect.startedAt) / SLOT_MOVE_ANIM_DURATION, 0, 1);
   const eased = 1 - Math.pow(1 - t, 3);
   const pos = getSlotMoveEffectPositions(effect, width, height);
 
@@ -5447,9 +5669,9 @@ function drawSlotMoveEffect(effect, width, height) {
   drawFloatingMiniCard(effect.card, cx, cy, pos.card.w, pos.card.h, scale, rotation, alpha);
 }
 
-function drawBombEffect(effect, width, height) {
-  const now = Date.now();
-  const t = clamp((now - effect.startedAt) / BOMB_ANIM_DURATION, 0, 1);
+function drawBombEffect(effect, width, height, now) {
+  const tNow = now != null ? now : Date.now();
+  const t = clamp((tNow - effect.startedAt) / BOMB_ANIM_DURATION, 0, 1);
   const pos = getEffectPositions(effect.sideId, effect.queueIndex, width, height);
 
   if (!pos) {
@@ -5515,7 +5737,17 @@ function getDiscardEffectPositions(effect, width, height) {
   const sourcePanel = effect.sourceSideId === "ai" ? layout.aiPanel : layout.playerPanel;
   const targetPanel = effect.targetSideId === "ai" ? layout.aiPanel : layout.playerPanel;
   const sourceArea = { x: sourcePanel.x + 12, y: sourcePanel.y + 64, w: sourcePanel.w - 24, h: sourcePanel.h - 76 };
-  const card = getQueueCardRect(effect.queueIndex, sourceArea.x + 10, sourceArea.y + 12, sourceArea.w - 20, sourceArea.h - 22);
+  let queueIndex = effect.queueIndex;
+  if (game && effect.sourceSideId && effect.card) {
+    const sourceSide = game[effect.sourceSideId];
+    if (sourceSide && sourceSide.queue) {
+      const live = sourceSide.queue.indexOf(effect.card);
+      if (live >= 0) {
+        queueIndex = live;
+      }
+    }
+  }
+  const card = getQueueCardRect(queueIndex, sourceArea.x + 10, sourceArea.y + 12, sourceArea.w - 20, sourceArea.h - 22);
   const discardPileButton = getDiscardPileButton(targetPanel);
 
   return {
@@ -5739,7 +5971,7 @@ function drawControls(width, height) {
   buttons.draw = controls.left;
   buttons.stop = controls.right;
 
-  const canDraw = game.player.queue.length < QUEUE_LIMIT && game.player.drawPile.length + game.player.discardPile.length > 0;
+  const canDraw = !isQueueFull(game.player) && game.player.drawPile.length + game.player.discardPile.length > 0;
   drawBattleActionButton(buttons.draw, canDraw ? "继续抽" : "已满", "aggressive", canDraw);
   drawBattleActionButton(buttons.stop, "停手", "hold", true);
 }
@@ -6057,10 +6289,10 @@ function drawCopyTargetModal(width, height) {
 
 function drawShieldTargetModal(width, height) {
   const controls = getControlRects(width, height);
-  drawBottomPrompt(controls, "选择盾牌目标", "点击己方队列中另一张牌，将其随机洗回己方抽牌堆（不能选盾牌自身）。");
+  drawBottomPrompt(controls, "选择回收目标", "点击己方队列中另一张牌，将其随机洗回己方抽牌堆（不能选回收卡自身）。");
   const effectControls = getEffectControlRects(controls);
   buttons.skipEffect = effectControls.full;
-  drawButton(buttons.skipEffect, "取消盾牌", THEME.buttonStop, "#061d1b", true);
+  drawButton(buttons.skipEffect, "取消回收", THEME.buttonStop, "#061d1b", true);
 }
 
 function getEffectControlRects(controls) {
@@ -6162,10 +6394,9 @@ function getCatalogEntryForBattleCard(card) {
 }
 
 function resolveEffectDisplayName(card) {
-  if (!card || !card.effect || !EFFECTS[card.effect]) {
+  if (!card) {
     return "";
   }
-
   if (card.catalogEffectName && String(card.catalogEffectName).trim()) {
     return String(card.catalogEffectName).trim();
   }
@@ -6175,7 +6406,25 @@ function resolveEffectDisplayName(card) {
     return String(entry.effectName).trim();
   }
 
-  return EFFECTS[card.effect].name;
+  return "";
+}
+
+/** 迷你卡底部效果条：卡表 effectName/catalogEffectName，或已注册引擎 effect 的记分卡。 */
+function shouldShowMiniCardEffectRibbon(card, ribbonLabel) {
+  if (!card || card.type === CARD_BOMB || card.type !== CARD_SCORE || !ribbonLabel) {
+    return false;
+  }
+  if (card.effect && EFFECTS[card.effect]) {
+    return true;
+  }
+  if (card.catalogEffectName && String(card.catalogEffectName).trim()) {
+    return true;
+  }
+  const entry = getCatalogEntryForBattleCard(card);
+  if (entry && entry.effectName && String(entry.effectName).trim()) {
+    return true;
+  }
+  return false;
 }
 
 function getCardUIMainTitle(card) {
@@ -6187,11 +6436,9 @@ function getCardUIMainTitle(card) {
     return String(card.displayName).trim();
   }
 
-  if (card.effect && EFFECTS[card.effect]) {
-    const cn = resolveEffectDisplayName(card);
-    if (cn) {
-      return cn;
-    }
+  const fromCatalogOrRegistered = resolveEffectDisplayName(card);
+  if (fromCatalogOrRegistered) {
+    return fromCatalogOrRegistered;
   }
 
   return getCardName(card);
@@ -6253,7 +6500,8 @@ function getQueueCardDisplaySize(width, height) {
   return { w: rect.w, h: rect.h };
 }
 
-function drawQueue(side, x, y, width, height) {
+function drawQueue(side, x, y, width, height, frameNow) {
+  const now = frameNow != null ? frameNow : Date.now();
   ctx.textAlign = "left";
 
   for (let i = 0; i < QUEUE_LIMIT; i += 1) {
@@ -6261,9 +6509,17 @@ function drawQueue(side, x, y, width, height) {
     drawCardSlot(slot, side.id === "ai");
   }
 
-  side.queue.slice(0, QUEUE_LIMIT).forEach(function (card, index) {
-    if (isQueueCardHiddenByDrawEffect(side.id, index) || isQueueCardHiddenBySlotMoveEffect(side.id, index, card) || isQueueCardHiddenByDeferDiscardFlight(side.id, card)) {
-      return;
+  for (let index = 0; index < QUEUE_LIMIT; index += 1) {
+    const card = side.queue[index];
+    if (!card) {
+      continue;
+    }
+    if (
+      isQueueCardHiddenByDrawEffect(side.id, index, now) ||
+      isQueueCardHiddenBySlotMoveEffect(side.id, index, card, now) ||
+      isQueueCardHiddenByDeferDiscardFlight(side.id, card, now)
+    ) {
+      continue;
     }
 
     const rect = getQueueCardRect(index, x, y, width, height);
@@ -6272,7 +6528,7 @@ function drawQueue(side, x, y, width, height) {
     if (isActiveEffectCard(card)) {
       drawActiveSkillCardGlow(rect);
     }
-  });
+  }
 }
 
 function drawCardSlot(rect, isAi) {
@@ -6292,15 +6548,15 @@ function drawCardSlot(rect, isAi) {
   roundRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, Math.max(0, border.cornerRadius - 2), false, true);
 }
 
-function isQueueCardHiddenByDrawEffect(sideId, queueIndex) {
-  const now = Date.now();
+function isQueueCardHiddenByDrawEffect(sideId, queueIndex, frameNow) {
+  const now = frameNow != null ? frameNow : Date.now();
   return activeEffects.some(function (effect) {
     return effect.type === "draw" && effect.sideId === sideId && effect.queueIndex === queueIndex && now - effect.startedAt < DRAW_ANIM_DURATION;
   });
 }
 
-function isQueueCardHiddenBySlotMoveEffect(sideId, queueIndex, card) {
-  const now = Date.now();
+function isQueueCardHiddenBySlotMoveEffect(sideId, queueIndex, card, frameNow) {
+  const now = frameNow != null ? frameNow : Date.now();
   return activeEffects.some(function (effect) {
     return (
       effect.type === "slotMove" &&
@@ -6313,8 +6569,8 @@ function isQueueCardHiddenBySlotMoveEffect(sideId, queueIndex, card) {
   });
 }
 
-function isQueueCardHiddenByDeferDiscardFlight(sideId, card) {
-  const now = Date.now();
+function isQueueCardHiddenByDeferDiscardFlight(sideId, card, frameNow) {
+  const now = frameNow != null ? frameNow : Date.now();
   return activeEffects.some(function (effect) {
     return (
       effect.type === "discard" &&
@@ -6426,7 +6682,8 @@ function drawMiniCard(card, x, y, w, h) {
   const mainSize = Math.max(12, Math.min(28, Math.floor(edge * 0.42)));
   drawMiddleText(mainText, sx + edge / 2, sy + edge / 2, mainSize, mainColor, "bold");
 
-  if (card.effect && EFFECTS[card.effect]) {
+  const ribbonLabel = !isBomb ? resolveEffectDisplayName(card) : "";
+  if (!isBomb && shouldShowMiniCardEffectRibbon(card, ribbonLabel)) {
     const effSize = Math.max(10, Math.round(Math.max(8, Math.min(11, edge * 0.18)) * 1.3));
     const margin = Math.max(4, edge * 0.05);
     let effectCy = sy + edge * 0.845;
@@ -6434,14 +6691,7 @@ function drawMiniCard(card, x, y, w, h) {
     if (effectCy > maxCy) {
       effectCy = maxCy;
     }
-    drawCenteredMiddleText(
-      resolveEffectDisplayName(card),
-      sx + edge / 2,
-      effectCy,
-      effSize,
-      effBottomColor,
-      "bold"
-    );
+    drawCenteredMiddleText(ribbonLabel, sx + edge / 2, effectCy, effSize, effBottomColor, "bold");
   } else if (card.tempPollution === true && card.displayName) {
     const tagSize = Math.max(9, Math.round(Math.max(8, Math.min(11, edge * 0.16)) * 1.15));
     drawCenteredMiddleText(
@@ -6718,12 +6968,13 @@ function syncTestWinOverlayVisibility() {
 
 function draw() {
   const size = resizeCanvas();
-  update();
+  const frameNow = Date.now();
+  update(frameNow);
 
   if (scene === "title") {
     drawTitle(size.width, size.height);
   } else if (scene === "playing") {
-    drawGame(size.width, size.height);
+    drawGame(size.width, size.height, frameNow);
   } else if (scene === "backstage") {
     drawBackstage(size.width, size.height);
   } else if (scene === "routeMap") {
@@ -6736,7 +6987,7 @@ function draw() {
     drawTitle(size.width, size.height);
   }
 
-  drawActiveEffects(size.width, size.height);
+  drawActiveEffects(size.width, size.height, frameNow);
   drawOpponentSpeechBubbleOverlay(size.width, size.height);
   drawPileModal(size.width, size.height);
   drawTips(size.width, size.height);
@@ -6812,5 +7063,6 @@ Promise.all([
 ].concat(expeditionDeckLoadPromises()))
   .finally(function () {
     rebuildCatalogIndex();
+    resolveAllDeckCatalogIds();
     bootstrapReady = true;
   });

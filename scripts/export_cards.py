@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Read Data/carddesign.xlsx (sheet 全卡表) and write Data/cards.json（含全部卡与 unlocked 标签；商店是否上架由运行时筛选）。"""
+"""Read Data/carddesign.xlsx（sheet「全卡表」）写入 Data/cards.json。
+
+列「牌名」或「牌名列」（若都存在则优先前者在 NAME_COLUMNS 中的顺序——当前为先「牌名列」再「牌名」）
+写入各卡的 card.displayName，供卡组表按中文解析；商店是否上架仍由运行时与「是否解锁」列控制。"""
 from __future__ import annotations
 
 import json
@@ -18,6 +21,8 @@ XLSX_PATH = ROOT / "Data" / "carddesign.xlsx"
 OUTPUT_PATH = ROOT / "Data" / "cards.json"
 SHEET_FULL_TABLE = "全卡表"
 UNLOCK_COLUMN = "是否解锁"
+# 「牌名列」或与数据表一致的「牌名」，用于卡组表按中文名解析与 UI 展示
+NAME_COLUMNS = ("牌名列", "牌名")
 
 
 def _cell_str(val) -> str:
@@ -119,7 +124,7 @@ def row_to_entry(row: dict, unlocked: bool) -> dict | None:
             card["effect"] = "bluff"
         elif effect_name in ("恐吓",):
             card["effect"] = "intimidate"
-        elif effect_name in ("埋伏",):
+        elif effect_name in ("陷阱",):
             card["effect"] = "ambush"
         elif effect_name in ("复制",):
             card["effect"] = "copy"
@@ -131,26 +136,41 @@ def row_to_entry(row: dict, unlocked: bool) -> dict | None:
             card["effect"] = "imp"
         elif effect_name in ("圣光",):
             card["effect"] = "divineLight"
-        elif effect_name in ("盾牌",):
+        elif effect_name in ("回收"):
             card["effect"] = "shield"
         elif effect_name in ("首领",):
             card["effect"] = "chieftain"
-        elif effect_name in ("汲取",):
+        elif effect_name in ("魅魔",):
             card["effect"] = "leech"
-        elif effect_name in ("洪水",):
+        elif effect_name in ("掀桌",):
             card["effect"] = "flood"
         elif effect_name in ("污染",):
             card["effect"] = "pollute"
-        elif effect_name in ("威吓",):
+        elif effect_name in ("贷款",):
+            # 引擎键 menace：对手每抽一张，本卡在队列中的计分 −1（见 EFFECT_MENACE）
             card["effect"] = "menace"
-        elif effect_name in ("怂恿",):
+        elif effect_name in ("勾引", "怂恿"):
             card["effect"] = "incite"
         elif effect_name in ("废土",):
             card["effect"] = "wasteland"
         elif effect_name in ("毒源",):
             card["effect"] = "poisonSource"
+        elif effect_name in ("泄密",):
+            card["effect"] = "leakSecrets"
 
-    if card["type"] == "bomb":
+    name_col = ""
+    for col in NAME_COLUMNS:
+        v = row.get(col)
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            continue
+        s = _cell_str(v)
+        if s:
+            name_col = s
+            break
+
+    if name_col:
+        card["displayName"] = name_col
+    elif card["type"] == "bomb":
         card["displayName"] = effect_name if effect_name else "炸弹"
     elif effect_name:
         card["displayName"] = effect_name

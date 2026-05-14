@@ -1,5 +1,5 @@
 @echo off
-REM 按需手动运行：Excel -> Data\cards.json。游戏运行时只读取 cards.json，不会自动调用本脚本。
+REM 按需手动运行：carddesign.xlsx -> Data\cards.json；round1decks.xlsx -> Data\Decks\Rounds\round_1\*.json
 setlocal
 cd /d "%~dp0"
 
@@ -12,10 +12,17 @@ if errorlevel 1 (
 
 python "%~dp0scripts\export_cards.py"
 if errorlevel 1 (
-  echo Export failed.
+  echo Export cards failed.
   pause
   exit /b 1
 )
 
-echo Done: Data\cards.json
+python "%~dp0scripts\export_round1_decks.py"
+if errorlevel 1 (
+  echo Export round1 decks failed.
+  pause
+  exit /b 1
+)
+
+echo Done: Data\cards.json and Data\Decks\Rounds\round_1\
 pause
