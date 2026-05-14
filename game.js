@@ -213,6 +213,8 @@ const ROUTE_NODE_ICON_CENTER_OFFSET_Y_RATIO = -0.24;
 const ROUTE_NODE_LABEL_OFFSET_Y_RATIO = 0.17;
 const RUN_BOTTOM_BAR_HEIGHT = 72;
 const RUN_BOTTOM_BAR_MARGIN = 12;
+const BATTLE_LAYOUT_REFERENCE_WIDTH = 1206;
+const BATTLE_LAYOUT_REFERENCE_HEIGHT = 2622;
 const UI_FONT = '"Noto Sans SC", "Source Han Sans SC", sans-serif';
 const THEME = {
   panel: "#101423",
@@ -356,8 +358,8 @@ const DEFAULT_THRESHOLD_LAYOUT = {
   labelOffsetY: 0,
   pointStartX: 38,
   pointOffsetY: -5,
-  pointGap: 23.4,
-  pointRadius: 5.8,
+  pointGap: 24.8,
+  pointRadius: 6.8,
   flashRadiusBoost: 1.4
 };
 const DEFAULT_PANEL_LAYOUT = {
@@ -384,14 +386,17 @@ const DEFAULT_WIDGET_LAYOUT = {
 };
 const DEFAULT_CENTER_LAYOUT = {
   roundTitleY: 18,
+  roundTitleOffsetY: -16,
   roundTitleFontSize: 11,
   sectionLabelY: 23,
+  sectionLabelOffsetY: -16,
   sectionLabelSize: 10,
   winRowYRatio: 0.66,
-  aiColumnXRatio: 0.1,
-  playerColumnXRatio: 0.9,
+  scoreRowOffsetY: 13,
+  aiColumnXRatio: 0.14,
+  playerColumnXRatio: 0.86,
   vsSize: 15,
-  winSlotSize: 16,
+  winSlotSize: 17,
   winSlotGap: 8,
   bottomPromptHeight: BOTTOM_PROMPT_HEIGHT_DEFAULT,
   bottomPromptGap: BOTTOM_PROMPT_GAP_DEFAULT
@@ -4556,8 +4561,9 @@ function drawRouteMap(width, height) {
   shopBuyButtonHitAreas = [];
   drawRouteBackground(width, height);
 
-  const bottomBar = getRunBottomBarRect(width, height);
-  const routeTitleY = height * 0.085 + 10;
+  const frame = getRunLayoutFrame(width, height);
+  const bottomBar = getRunBottomBarRect(width, height, frame);
+  const routeTitleY = frame.y + frame.h * 0.085 + 10;
   drawRouteHeader(width, routeTitleY);
   ensureRunState();
   const routeRoundCurrent = Math.min(RUN_BOSS_ROUNDS, (runState.bossesDefeated || 0) + 1);
@@ -4570,11 +4576,11 @@ function drawRouteMap(width, height) {
     "normal"
   );
 
-  const mapTop = height * 0.155;
+  const mapTop = frame.y + frame.h * 0.155;
   const mapArea = {
-    x: 16,
+    x: frame.x + 16,
     y: mapTop,
-    w: width - 32,
+    w: frame.w - 32,
     h: bottomBar.y - mapTop - 12
   };
 
@@ -4592,7 +4598,7 @@ function drawRouteMap(width, height) {
     routeNodeHitAreas.push({ node: node, cx: pos.cx, cy: pos.cy, rx: pos.rx, ry: pos.ry });
   });
 
-  drawRunBottomBar(width, height);
+  drawRunBottomBar(width, height, frame);
 }
 
 function getRouteNodeRevealProgress(node, now) {
@@ -4961,18 +4967,23 @@ function drawOpponentSelect(width, height) {
   drawRunBottomBar(width, height);
 }
 
-function getRunBottomBarRect(width, height) {
+function getRunLayoutFrame(width, height) {
+  return getBattleLayoutFrame(width, height);
+}
+
+function getRunBottomBarRect(width, height, frame) {
+  const layoutFrame = frame || getRunLayoutFrame(width, height);
   return {
-    x: RUN_BOTTOM_BAR_MARGIN,
-    y: height - RUN_BOTTOM_BAR_HEIGHT - RUN_BOTTOM_BAR_MARGIN,
-    w: width - RUN_BOTTOM_BAR_MARGIN * 2,
+    x: layoutFrame.x + RUN_BOTTOM_BAR_MARGIN,
+    y: layoutFrame.y + layoutFrame.h - RUN_BOTTOM_BAR_HEIGHT - RUN_BOTTOM_BAR_MARGIN,
+    w: layoutFrame.w - RUN_BOTTOM_BAR_MARGIN * 2,
     h: RUN_BOTTOM_BAR_HEIGHT
   };
 }
 
-function drawRunBottomBar(width, height) {
+function drawRunBottomBar(width, height, frame) {
   ensureRunState();
-  const bar = getRunBottomBarRect(width, height);
+  const bar = getRunBottomBarRect(width, height, frame);
   ctx.save();
   ctx.shadowColor = "rgba(0, 0, 0, 0.48)";
   ctx.shadowBlur = 10;
@@ -5119,7 +5130,7 @@ function drawGame(width, height, frameNow) {
   const centerH = playerPanel.y - centerY - gap;
 
   drawSidePanel(game.ai, aiPanel, true, now);
-  drawCenterStatus({ x: layout.sideMargin, y: centerY, w: width - layout.sideMargin * 2, h: centerH });
+  drawCenterStatus({ x: layout.frame.x + layout.sideMargin, y: centerY, w: layout.frame.w - layout.sideMargin * 2, h: centerH });
   drawSidePanel(game.player, playerPanel, false, now);
   drawControls(width, height);
 }
@@ -5152,25 +5163,39 @@ function drawBattleBackground(width, height) {
 }
 
 function getGameLayout(width, height) {
+  const frame = getBattleLayoutFrame(width, height);
   const panelLayout = getPanelLayout();
   const margin = panelLayout.topMargin;
   const gap = panelLayout.panelGap;
   const sideMargin = panelLayout.sideMargin;
-  const controlsY = getGameplayAreaBottom(width, height);
-  const centerH = Math.max(panelLayout.minCenterH, height * panelLayout.centerHRatio);
-  const panelH = (controlsY - margin - centerH - gap * 2) / 2;
+  const controlsY = getGameplayAreaBottom(width, height, frame);
+  const centerH = Math.max(panelLayout.minCenterH, frame.h * panelLayout.centerHRatio);
+  const panelH = (controlsY - frame.y - margin - centerH - gap * 2) / 2;
 
   return {
+    frame: frame,
     gap: gap,
     sideMargin: sideMargin,
-    aiPanel: { x: sideMargin, y: margin, w: width - sideMargin * 2, h: panelH },
-    playerPanel: { x: sideMargin, y: margin + panelH + gap + centerH + gap, w: width - sideMargin * 2, h: panelH }
+    aiPanel: { x: frame.x + sideMargin, y: frame.y + margin, w: frame.w - sideMargin * 2, h: panelH },
+    playerPanel: { x: frame.x + sideMargin, y: frame.y + margin + panelH + gap + centerH + gap, w: frame.w - sideMargin * 2, h: panelH }
   };
 }
 
-function getGameplayAreaBottom(width, height) {
+function getBattleLayoutFrame(width, height) {
+  const referenceHeight = width * (BATTLE_LAYOUT_REFERENCE_HEIGHT / BATTLE_LAYOUT_REFERENCE_WIDTH);
+  const frameH = Math.min(height, referenceHeight);
+  return {
+    x: 0,
+    y: Math.max(0, (height - frameH) / 2),
+    w: width,
+    h: frameH
+  };
+}
+
+function getGameplayAreaBottom(width, height, frame) {
+  const layoutFrame = frame || getBattleLayoutFrame(width, height);
   const c = getCenterLayout();
-  return getControlRects(width, height).y - c.bottomPromptHeight - c.bottomPromptGap;
+  return getGameplayControlRects(width, height, layoutFrame).y - c.bottomPromptHeight - c.bottomPromptGap;
 }
 
 function countWrappedTextLines(text, maxWidth, size, weight) {
@@ -5865,12 +5890,14 @@ function drawCenterStatus(rect) {
   drawPanel(rect, "#090d18");
   drawPanelRim(rect, THEME.gold);
   const centerX = rect.x + rect.w / 2;
-  const labelY = rect.y + centerUi.sectionLabelY;
-  const slotY = rect.y + rect.h * centerUi.winRowYRatio;
+  const centerLineY = rect.y + rect.h / 2;
+  const titleY = clamp(centerLineY + centerUi.roundTitleOffsetY, rect.y + 12, rect.y + rect.h - 28);
+  const slotY = clamp(centerLineY + centerUi.scoreRowOffsetY, rect.y + 30, rect.y + rect.h - 14);
+  const labelY = clamp(centerLineY + centerUi.sectionLabelOffsetY, rect.y + 12, rect.y + rect.h - 28);
   const aiX = rect.x + rect.w * centerUi.aiColumnXRatio;
   const playerX = rect.x + rect.w * centerUi.playerColumnXRatio;
 
-  drawCenterRoundTitle(centerX, rect.y + centerUi.roundTitleY);
+  drawCenterRoundTitle(centerX, titleY);
 
   drawCenteredText("对手通关", aiX, labelY, centerUi.sectionLabelSize, THEME.muted, "bold");
   drawWinSlots(aiX, slotY, game.ai.wins, THEME.panelEdge, "ai");
@@ -5954,7 +5981,7 @@ function drawWinSlots(centerX, centerY, wins, fillColor, sideKey) {
 
 function drawControls(width, height) {
   buttons = {};
-  const controls = getControlRects(width, height);
+  const controls = getGameplayControlRects(width, height);
 
   if (scene === "playing" && game.matchWinner) {
     if (game.matchWinner === "ai") {
@@ -6014,6 +6041,24 @@ function getControlRects(width, height) {
     left: { x: margin, y: y, w: w, h: h },
     right: { x: margin + w + gap, y: y, w: w, h: h },
     full: { x: margin, y: y, w: width - margin * 2, h: h }
+  };
+}
+
+function getGameplayControlRects(width, height, frame) {
+  const layoutFrame = frame || getBattleLayoutFrame(width, height);
+  const widgetLayout = getWidgetLayout();
+  const y = layoutFrame.y + layoutFrame.h * widgetLayout.controlYRatio;
+  const margin = widgetLayout.controlMargin;
+  const gap = widgetLayout.controlGap;
+  const w = (layoutFrame.w - margin * 2 - gap) / 2;
+  const h = widgetLayout.controlHeight;
+
+  return {
+    y: y,
+    h: h,
+    left: { x: layoutFrame.x + margin, y: y, w: w, h: h },
+    right: { x: layoutFrame.x + margin + w + gap, y: y, w: w, h: h },
+    full: { x: layoutFrame.x + margin, y: y, w: layoutFrame.w - margin * 2, h: h }
   };
 }
 
@@ -6262,7 +6307,7 @@ function drawDeckViewerFade(area) {
 }
 
 function drawActiveEffectModal(width, height) {
-  const controls = getControlRects(width, height);
+  const controls = getGameplayControlRects(width, height);
   drawBottomPrompt(controls, "是否发动「" + modal.title + "」？", getCardEffectDescription(modal.card));
   const effectControls = getEffectControlRects(controls);
   buttons.useEffect = effectControls.left;
@@ -6272,7 +6317,7 @@ function drawActiveEffectModal(width, height) {
 }
 
 function drawStealTargetModal(width, height) {
-  const controls = getControlRects(width, height);
+  const controls = getGameplayControlRects(width, height);
   drawBottomPrompt(controls, "选择偷窃目标", "点击对手队列卡牌完成偷窃。");
   const effectControls = getEffectControlRects(controls);
   buttons.skipEffect = effectControls.full;
@@ -6280,7 +6325,7 @@ function drawStealTargetModal(width, height) {
 }
 
 function drawCopyTargetModal(width, height) {
-  const controls = getControlRects(width, height);
+  const controls = getGameplayControlRects(width, height);
   drawBottomPrompt(controls, "选择复制目标", "点击己方队列中任一其他牌（不能选复制卡本身），插入其下方的临时复制；若复制的牌带有主动技能，随后会询问是否发动。");
   const effectControls = getEffectControlRects(controls);
   buttons.skipEffect = effectControls.full;
@@ -6288,7 +6333,7 @@ function drawCopyTargetModal(width, height) {
 }
 
 function drawShieldTargetModal(width, height) {
-  const controls = getControlRects(width, height);
+  const controls = getGameplayControlRects(width, height);
   drawBottomPrompt(controls, "选择回收目标", "点击己方队列中另一张牌，将其随机洗回己方抽牌堆（不能选回收卡自身）。");
   const effectControls = getEffectControlRects(controls);
   buttons.skipEffect = effectControls.full;
