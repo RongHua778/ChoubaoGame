@@ -340,6 +340,8 @@ let buttons = {};
 let pileHitAreas = [];
 let queueCardHitAreas = [];
 let modalCardHitAreas = [];
+let pileModalScrollArea = null;
+let pileModalDrag = null;
 let shopCardHitAreas = [];
 let shopBuyButtonHitAreas = [];
 let routeNodeHitAreas = [];
@@ -2250,6 +2252,8 @@ function openModal(nextModal) {
 
 function closeModal() {
   modal = modalStack.pop() || null;
+  pileModalDrag = null;
+  pileModalScrollArea = null;
 }
 
 function resolveActiveEffect(useEffect) {
@@ -3475,7 +3479,12 @@ function hitRouteNode(point, area) {
 }
 
 function getCanvasPoint(event) {
-  const touch = event.changedTouches && event.changedTouches[0] ? event.changedTouches[0] : event.touches[0];
+  const touch =
+    event.changedTouches && event.changedTouches[0]
+      ? event.changedTouches[0]
+      : event.touches && event.touches[0]
+        ? event.touches[0]
+        : event;
   const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0, width: canvas.width, height: canvas.height };
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -3585,12 +3594,13 @@ function handleTouch(event) {
     }
 
     if (modal.type === "pile") {
-      const modalCardHit = modalCardHitAreas.find(function (area) {
-        return hitButton(point, area);
-      });
+      if (hitButton(point, buttons.closeModal)) {
+        closeModal();
+        return;
+      }
 
-      if (modalCardHit) {
-        openCardTipModal(modalCardHit.card);
+      if (pileModalScrollArea && hitButton(point, pileModalScrollArea)) {
+        startPileModalDrag(point);
         return;
       }
     }
@@ -3657,6 +3667,79 @@ function handleTouch(event) {
   } else if (hitButton(point, buttons.stop)) {
     playerStop();
   }
+}
+
+function startPileModalDrag(point) {
+  pileModalDrag = {
+    startX: point.x,
+    startY: point.y,
+    lastY: point.y,
+    startScrollY: modal && typeof modal.scrollY === "number" ? modal.scrollY : 0,
+    moved: false
+  };
+}
+
+function handlePointerMove(event) {
+  if (!pileModalDrag || !modal || modal.type !== "pile" || !pileModalScrollArea) {
+    return;
+  }
+
+  const point = getCanvasPoint(event);
+  const dy = point.y - pileModalDrag.lastY;
+  if (Math.abs(point.y - pileModalDrag.startY) > 4 || Math.abs(point.x - pileModalDrag.startX) > 4) {
+    pileModalDrag.moved = true;
+  }
+  pileModalDrag.lastY = point.y;
+  scrollPileModalBy(-dy);
+
+  if (event.preventDefault) {
+    event.preventDefault();
+  }
+}
+
+function handlePointerEnd(event) {
+  if (!pileModalDrag || !modal || modal.type !== "pile") {
+    pileModalDrag = null;
+    return;
+  }
+
+  const point = getCanvasPoint(event);
+  const wasMoved = pileModalDrag.moved;
+  pileModalDrag = null;
+
+  if (!wasMoved) {
+    const modalCardHit = modalCardHitAreas.find(function (area) {
+      return hitButton(point, area);
+    });
+
+    if (modalCardHit) {
+      openCardTipModal(modalCardHit.card);
+    }
+  }
+}
+
+function handleWheel(event) {
+  if (!modal || modal.type !== "pile" || !pileModalScrollArea) {
+    return;
+  }
+
+  const point = getCanvasPoint(event);
+  if (!hitButton(point, pileModalScrollArea)) {
+    return;
+  }
+
+  scrollPileModalBy(event.deltaY || 0);
+  if (event.preventDefault) {
+    event.preventDefault();
+  }
+}
+
+function scrollPileModalBy(deltaY) {
+  if (!modal || modal.type !== "pile" || !pileModalScrollArea) {
+    return;
+  }
+
+  modal.scrollY = clamp((modal.scrollY || 0) + deltaY, 0, pileModalScrollArea.maxScroll || 0);
 }
 
 function handleBackstageTouch(point) {
@@ -4468,13 +4551,15 @@ function drawRouteNodeMinimalIcon(nodeType, cx, cy, r, strokeStyle) {
 
   if (nodeType === ROUTE_NODE_NORMAL) {
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.48, cy - r * 0.46);
-    ctx.lineTo(cx + r * 0.48, cy + r * 0.46);
-    ctx.moveTo(cx + r * 0.48, cy - r * 0.46);
-    ctx.lineTo(cx - r * 0.48, cy + r * 0.46);
+    ctx.moveTo(cx - r * 0.5, cy - r * 0.36);
+    ctx.lineTo(cx - r * 0.08, cy - r * 0.58);
+    ctx.lineTo(cx + r * 0.5, cy + r * 0.22);
+    ctx.moveTo(cx + r * 0.5, cy - r * 0.36);
+    ctx.lineTo(cx + r * 0.08, cy - r * 0.58);
+    ctx.lineTo(cx - r * 0.5, cy + r * 0.22);
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.18, 0, Math.PI * 2);
+    ctx.arc(cx, cy - r * 0.04, r * 0.13, 0, Math.PI * 2);
     ctx.stroke();
   } else if (nodeType === ROUTE_NODE_ELITE) {
     ctx.beginPath();
@@ -4484,10 +4569,6 @@ function drawRouteNodeMinimalIcon(nodeType, cx, cy, r, strokeStyle) {
     ctx.lineTo(cx - r * 0.12, cy + r * 0.62);
     ctx.lineTo(cx + r * 0.42, cy - r * 0.14);
     ctx.lineTo(cx + r * 0.04, cy - r * 0.14);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - r * 0.42, cy + r * 0.56);
-    ctx.lineTo(cx + r * 0.24, cy + r * 0.56);
     ctx.stroke();
   } else if (nodeType === ROUTE_NODE_EVENT) {
     ctx.beginPath();
@@ -4524,16 +4605,16 @@ function drawRouteNodeMinimalIcon(nodeType, cx, cy, r, strokeStyle) {
     ctx.stroke();
   } else if (nodeType === ROUTE_NODE_BOSS || nodeType === ROUTE_NODE_BOSS_BEATEN) {
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.5, cy + r * 0.22);
-    ctx.lineTo(cx - r * 0.34, cy - r * 0.34);
-    ctx.lineTo(cx - r * 0.08, cy + r * 0.02);
-    ctx.lineTo(cx + r * 0.18, cy - r * 0.44);
-    ctx.lineTo(cx + r * 0.42, cy + r * 0.22);
-    ctx.closePath();
+    ctx.arc(cx, cy - r * 0.1, r * 0.45, 0, Math.PI * 2);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.36, cy + r * 0.42);
-    ctx.lineTo(cx + r * 0.34, cy + r * 0.42);
+    ctx.arc(cx, cy - r * 0.1, r * 0.2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.54, cy + r * 0.44);
+    ctx.lineTo(cx + r * 0.54, cy + r * 0.44);
+    ctx.moveTo(cx - r * 0.34, cy + r * 0.22);
+    ctx.lineTo(cx + r * 0.34, cy + r * 0.22);
     ctx.stroke();
     if (nodeType === ROUTE_NODE_BOSS_BEATEN) {
       ctx.beginPath();
@@ -4543,18 +4624,19 @@ function drawRouteNodeMinimalIcon(nodeType, cx, cy, r, strokeStyle) {
     }
   } else if (nodeType === ROUTE_NODE_START) {
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.34, cy - r * 0.56);
-    ctx.lineTo(cx - r * 0.34, cy + r * 0.54);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - r * 0.28, cy - r * 0.48);
-    ctx.lineTo(cx + r * 0.38, cy - r * 0.22);
-    ctx.lineTo(cx - r * 0.28, cy + r * 0.06);
+    ctx.moveTo(cx - r * 0.46, cy - r * 0.42);
+    ctx.lineTo(cx + r * 0.18, cy - r * 0.42);
+    ctx.lineTo(cx + r * 0.48, cy);
+    ctx.lineTo(cx + r * 0.18, cy + r * 0.42);
+    ctx.lineTo(cx - r * 0.46, cy + r * 0.42);
     ctx.closePath();
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.48, cy + r * 0.56);
-    ctx.lineTo(cx + r * 0.36, cy + r * 0.56);
+    ctx.moveTo(cx - r * 0.18, cy);
+    ctx.lineTo(cx + r * 0.18, cy);
+    ctx.moveTo(cx + r * 0.04, cy - r * 0.18);
+    ctx.lineTo(cx + r * 0.22, cy);
+    ctx.lineTo(cx + r * 0.04, cy + r * 0.18);
     ctx.stroke();
   } else {
     ctx.beginPath();
@@ -4804,7 +4886,7 @@ function drawGameSymbol(x, y, size, symbol, color) {
 }
 
 function drawGame(width, height) {
-  drawBackground(width, height);
+  drawBattleBackground(width, height);
   pileHitAreas = [];
   queueCardHitAreas = [];
 
@@ -4819,6 +4901,33 @@ function drawGame(width, height) {
   drawCenterStatus({ x: layout.sideMargin, y: centerY, w: width - layout.sideMargin * 2, h: centerH });
   drawSidePanel(game.player, playerPanel, false);
   drawControls(width, height);
+}
+
+function drawBattleBackground(width, height) {
+  drawTitleAtmosphere(width, height);
+
+  ctx.save();
+  const tableGlow = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.48,
+    Math.min(width, height) * 0.08,
+    width * 0.5,
+    height * 0.52,
+    Math.max(width, height) * 0.58
+  );
+  tableGlow.addColorStop(0, "rgba(18, 60, 68, 0.32)");
+  tableGlow.addColorStop(0.45, "rgba(9, 24, 35, 0.36)");
+  tableGlow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = tableGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.12)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(width * 0.08, height * 0.5);
+  ctx.lineTo(width * 0.92, height * 0.5);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function getGameLayout(width, height) {
@@ -5082,10 +5191,8 @@ function drawOpponentSpeechBubbleOverlay(screenW, screenH) {
 }
 
 function drawSidePanel(side, rect, isAi) {
-  const panelColor = isAi ? THEME.panelAlt : THEME.panel;
-  drawPanel(rect, panelColor, { cornerRadius: 6 });
+  drawBattleSideFrame(rect, isAi);
   drawContestPanelDecor(rect, isAi);
-  drawPanelRim(rect, isAi ? THEME.panelEdge : THEME.panelEdgeCool, { lineWidth: 1.5, cornerRadius: 4, inset: 2 });
 
   ctx.textAlign = "left";
   const nameX = rect.x + 14;
@@ -5107,6 +5214,32 @@ function drawSidePanel(side, rect, isAi) {
   const cardArea = { x: rect.x + 12, y: rect.y + 64, w: rect.w - 24, h: rect.h - 76 };
   drawContestCardArea(cardArea, isAi);
   drawQueue(side, cardArea.x + 10, cardArea.y + 12, cardArea.w - 20, cardArea.h - 22);
+}
+
+function drawBattleSideFrame(rect, isAi) {
+  const edge = isAi ? "240, 93, 143" : "94, 231, 255";
+  const panel = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
+  panel.addColorStop(0, isAi ? "rgba(35, 15, 31, 0.9)" : "rgba(9, 27, 40, 0.9)");
+  panel.addColorStop(0.52, "rgba(8, 12, 22, 0.94)");
+  panel.addColorStop(1, isAi ? "rgba(18, 8, 18, 0.95)" : "rgba(5, 13, 22, 0.95)");
+
+  ctx.save();
+  ctx.shadowColor = "rgba(" + edge + ", 0.28)";
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetY = 2;
+  ctx.fillStyle = panel;
+  ctx.strokeStyle = "rgba(" + edge + ", 0.66)";
+  ctx.lineWidth = 1.5;
+  roundRect(rect.x, rect.y, rect.w, rect.h, 8, true, true);
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(244, 247, 255, 0.09)";
+  ctx.lineWidth = 1;
+  roundRect(rect.x + 5, rect.y + 5, rect.w - 10, rect.h - 10, 5, false, true);
+
+  ctx.fillStyle = "rgba(" + edge + ", 0.08)";
+  ctx.fillRect(rect.x + 12, rect.y + 42, rect.w - 24, 1);
+  ctx.restore();
 }
 
 function drawStoppedBadge(side, nameX, nameY) {
@@ -5178,21 +5311,21 @@ function fitText(text, maxWidth, size, weight) {
 
 function drawContestPanelDecor(rect, isAi) {
   ctx.save();
-  ctx.globalAlpha = 0.42;
-  for (let i = 0; i < 5; i += 1) {
-    const y = rect.y + 18 + i * 26;
-    ctx.strokeStyle = i % 2 === 0 ? "rgba(240, 93, 143, 0.22)" : "rgba(94, 231, 255, 0.14)";
+  ctx.globalAlpha = 0.24;
+  for (let i = 0; i < 4; i += 1) {
+    const y = rect.y + 56 + i * 31;
+    ctx.strokeStyle = isAi ? "rgba(240, 93, 143, 0.16)" : "rgba(94, 231, 255, 0.13)";
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(rect.x + 12, y);
-    ctx.lineTo(rect.x + rect.w - 12, y + Math.sin(i + pulse) * 1.5);
+    ctx.moveTo(rect.x + 18, y);
+    ctx.lineTo(rect.x + rect.w - 18, y);
     ctx.stroke();
   }
   ctx.restore();
 
-  const glowX = isAi ? rect.x + rect.w * 0.28 : rect.x + rect.w * 0.72;
-  const glow = ctx.createRadialGradient(glowX, rect.y + 34, 8, glowX, rect.y + 34, rect.w * 0.55);
-  glow.addColorStop(0, isAi ? "rgba(240, 93, 143, 0.2)" : "rgba(94, 231, 255, 0.18)");
+  const glowX = isAi ? rect.x + rect.w * 0.18 : rect.x + rect.w * 0.82;
+  const glow = ctx.createRadialGradient(glowX, rect.y + rect.h * 0.36, 8, glowX, rect.y + rect.h * 0.36, rect.w * 0.62);
+  glow.addColorStop(0, isAi ? "rgba(240, 93, 143, 0.14)" : "rgba(94, 231, 255, 0.13)");
   glow.addColorStop(1, "rgba(255, 199, 111, 0)");
   ctx.fillStyle = glow;
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
@@ -5204,35 +5337,34 @@ function drawPileButtonFace(rect, label, count, strokeColor) {
   ctx.shadowColor = "transparent";
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
-  ctx.fillStyle = "rgba(14, 18, 28, 0.82)";
+  ctx.fillStyle = "rgba(7, 11, 20, 0.76)";
   ctx.strokeStyle = stroke;
-  ctx.globalAlpha = 0.92;
+  ctx.globalAlpha = 0.84;
   ctx.lineWidth = 1;
   roundRect(rect.x, rect.y, rect.w, rect.h, 5, true, true);
   ctx.globalAlpha = 1;
 
-  drawCenteredMiddleText(label + " " + count, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5, 12, THEME.text, "bold");
+  drawCenteredMiddleText(label + " " + count, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5, 12, "rgba(244, 247, 255, 0.86)", "bold");
 }
 
 function drawContestCardArea(rect, isAi) {
-  const border = getBattleBorderOptions({ lineWidth: 2, cornerRadius: 7, glowBrightness: 1 });
-  const innerRadius = Math.max(0, border.cornerRadius - 2);
-  ctx.fillStyle = "#080b13";
-  ctx.strokeStyle = isAi ? THEME.panelEdge : THEME.panelEdgeCool;
-  ctx.lineWidth = border.lineWidth;
-  ctx.shadowColor = isAi ? THEME.panelEdge : THEME.panelEdgeCool;
-  ctx.shadowBlur = 8 * border.glowBrightness;
-  roundRect(rect.x, rect.y, rect.w, rect.h, border.cornerRadius, true, true);
-  ctx.shadowColor = "transparent";
-  ctx.shadowBlur = 0;
-
-  const felt = ctx.createLinearGradient(rect.x, rect.y, rect.x, rect.y + rect.h);
-  felt.addColorStop(0, isAi ? "#241124" : "#102638");
-  felt.addColorStop(1, isAi ? "#100912" : "#07131d");
+  const edge = isAi ? "240, 93, 143" : "94, 231, 255";
+  ctx.save();
+  ctx.shadowColor = "rgba(" + edge + ", 0.18)";
+  ctx.shadowBlur = 10;
+  const felt = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
+  felt.addColorStop(0, isAi ? "rgba(32, 12, 28, 0.62)" : "rgba(9, 31, 43, 0.62)");
+  felt.addColorStop(1, "rgba(3, 6, 12, 0.84)");
   ctx.fillStyle = felt;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
-  ctx.lineWidth = Math.max(0.5, border.lineWidth * 0.62);
-  roundRect(rect.x + 5, rect.y + 5, rect.w - 10, rect.h - 10, innerRadius, true, true);
+  ctx.strokeStyle = "rgba(" + edge + ", 0.52)";
+  ctx.lineWidth = 1.5;
+  roundRect(rect.x, rect.y, rect.w, rect.h, 7, true, true);
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(244, 247, 255, 0.1)";
+  ctx.lineWidth = 1;
+  roundRect(rect.x + 6, rect.y + 6, rect.w - 12, rect.h - 12, 4, false, true);
+  ctx.restore();
 }
 
 function drawActiveEffects(width, height) {
@@ -5608,8 +5740,32 @@ function drawControls(width, height) {
   buttons.stop = controls.right;
 
   const canDraw = game.player.queue.length < QUEUE_LIMIT && game.player.drawPile.length + game.player.discardPile.length > 0;
-  drawButton(buttons.draw, canDraw ? "继续抽" : "已满", canDraw ? THEME.button : "#3b3f52", "#120613", canDraw);
-  drawButton(buttons.stop, "停手", THEME.buttonStop, "#061d1b", true);
+  drawBattleActionButton(buttons.draw, canDraw ? "继续抽" : "已满", "aggressive", canDraw);
+  drawBattleActionButton(buttons.stop, "停手", "hold", true);
+}
+
+function drawBattleActionButton(rect, label, kind, enabled) {
+  const isHold = kind === "hold";
+  const edge = isHold ? "75, 214, 199" : "240, 93, 143";
+  const fill = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+  fill.addColorStop(0, enabled ? (isHold ? "rgba(35, 154, 144, 0.86)" : "rgba(188, 45, 93, 0.9)") : "rgba(40, 44, 60, 0.86)");
+  fill.addColorStop(1, enabled ? (isHold ? "rgba(76, 211, 196, 0.9)" : "rgba(235, 82, 134, 0.92)") : "rgba(31, 35, 49, 0.9)");
+
+  ctx.save();
+  ctx.shadowColor = enabled ? "rgba(" + edge + ", 0.34)" : "rgba(0, 0, 0, 0.35)";
+  ctx.shadowBlur = enabled ? 13 : 6;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = enabled ? "rgba(244, 247, 255, 0.56)" : "rgba(143, 155, 181, 0.28)";
+  ctx.lineWidth = 1.4;
+  roundRect(rect.x, rect.y, rect.w, rect.h, 7, true, true);
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(2, 3, 6, 0.28)";
+  ctx.lineWidth = 1;
+  roundRect(rect.x + 6, rect.y + 6, rect.w - 12, rect.h - 12, 4, false, true);
+  drawCenteredText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 6, 15, enabled ? "#071018" : "rgba(244, 247, 255, 0.58)", "bold");
+  ctx.restore();
 }
 
 function getControlRects(width, height) {
@@ -5677,7 +5833,8 @@ function openPileModal(side, pileType) {
   openModal({
     type: "pile",
     title: side.name + "的" + (pileType === "draw" ? "抽牌堆" : "弃牌堆"),
-    cards: cards
+    cards: cards,
+    scrollY: 0
   });
 }
 
@@ -5686,7 +5843,8 @@ function openRunDeckModal() {
   openModal({
     type: "pile",
     title: "当前牌库",
-    cards: sortCardsForDeckViewerDisplay(runState.deck)
+    cards: sortCardsForDeckViewerDisplay(runState.deck),
+    scrollY: 0
   });
 }
 
@@ -5744,26 +5902,131 @@ function drawPileModal(width, height) {
     return;
   }
 
-  ctx.fillStyle = "rgba(4, 6, 12, 0.82)";
+  drawDeckViewerModal(width, height);
+}
+
+function getDeckViewerLayout(width, height) {
+  const gap = 8;
+  const columns = 5;
+  const visibleRows = 5;
+  const panelW = Math.min(width - 36, 352);
+  const innerPad = 19;
+  const gridW = panelW - innerPad * 2;
+  const cardS = Math.floor(Math.min(62, (gridW - gap * (columns - 1)) / columns, (height * 0.47 - gap * (visibleRows - 1)) / visibleRows));
+  const safeCardS = Math.max(30, cardS);
+  const scrollH = safeCardS * visibleRows + gap * (visibleRows - 1);
+  const panelH = 73 + scrollH + 66;
+  const panel = {
+    x: (width - panelW) / 2,
+    y: Math.max(54, (height - panelH) / 2),
+    w: panelW,
+    h: panelH
+  };
+  const cardsW = safeCardS * columns + gap * (columns - 1);
+  const scrollArea = {
+    x: panel.x + (panel.w - cardsW) / 2,
+    y: panel.y + 76,
+    w: cardsW,
+    h: scrollH
+  };
+
+  return {
+    panel: panel,
+    scrollArea: scrollArea,
+    columns: columns,
+    visibleRows: visibleRows,
+    cardS: safeCardS,
+    gap: gap
+  };
+}
+
+function drawDeckViewerModal(width, height) {
+  ctx.fillStyle = "rgba(2, 4, 10, 0.76)";
   ctx.fillRect(0, 0, width, height);
 
-  const panel = { x: 14, y: height * 0.16, w: width - 28, h: height * 0.68 };
-  drawPanel(panel, THEME.panel);
-  drawPanelRim(panel, THEME.panelEdgeCool);
+  const layout = getDeckViewerLayout(width, height);
+  const panel = layout.panel;
+  const scrollArea = layout.scrollArea;
+  const cards = modal.cards || [];
+  const rows = Math.max(1, Math.ceil(cards.length / layout.columns));
+  const contentH = rows * layout.cardS + (rows - 1) * layout.gap;
+  const maxScroll = Math.max(0, contentH - scrollArea.h);
+  modal.scrollY = clamp(typeof modal.scrollY === "number" ? modal.scrollY : 0, 0, maxScroll);
+  pileModalScrollArea = Object.assign({ maxScroll: maxScroll }, scrollArea);
+
+  drawDeckViewerPanel(panel);
 
   ctx.textAlign = "left";
-  drawText(modal.title, panel.x + 18, panel.y + 34, 18, THEME.text, "bold");
-  drawText("共 " + modal.cards.length + " 张", panel.x + 18, panel.y + 58, 13, THEME.muted, "normal");
+  drawText(modal.title, panel.x + 20, panel.y + 34, 18, THEME.text, "bold");
+  drawText("共 " + cards.length + " 张", panel.x + 20, panel.y + 58, 13, "rgba(143, 155, 181, 0.82)", "normal");
+  buttons.closeModal = { x: panel.x + panel.w / 2 - 58, y: panel.y + panel.h - 46, w: 116, h: 34 };
+  drawBattleActionButton(buttons.closeModal, "关闭", "hold", true);
 
-  buttons.closeModal = { x: panel.x + panel.w / 2 - 72, y: panel.y + panel.h - 58, w: 144, h: 42 };
-  drawButton(buttons.closeModal, "关闭", THEME.buttonStop, "#061d1b", true);
-
-  if (modal.cards.length === 0) {
-    drawCenteredText("这里还没有卡牌", panel.x + panel.w / 2, panel.y + panel.h * 0.48, 15, THEME.muted, "normal");
+  if (cards.length === 0) {
+    drawCenteredText("这里还没有卡牌", panel.x + panel.w / 2, scrollArea.y + scrollArea.h * 0.5, 15, THEME.muted, "normal");
     return;
   }
 
-  drawModalCards(modal.cards, panel.x + 8, panel.y + 82, panel.w - 16, panel.h - 156, width, height);
+  drawScrollableDeckCards(cards, layout, modal.scrollY);
+}
+
+function drawDeckViewerPanel(panel) {
+  ctx.save();
+  ctx.shadowColor = "rgba(94, 231, 255, 0.28)";
+  ctx.shadowBlur = 18;
+  const fill = ctx.createLinearGradient(0, panel.y, 0, panel.y + panel.h);
+  fill.addColorStop(0, "rgba(9, 15, 28, 0.96)");
+  fill.addColorStop(1, "rgba(5, 8, 15, 0.98)");
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.62)";
+  ctx.lineWidth = 1.5;
+  roundRect(panel.x, panel.y, panel.w, panel.h, 8, true, true);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(244, 247, 255, 0.09)";
+  ctx.lineWidth = 1;
+  roundRect(panel.x + 6, panel.y + 6, panel.w - 12, panel.h - 12, 5, false, true);
+  ctx.restore();
+}
+
+function drawScrollableDeckCards(cards, layout, scrollY) {
+  const area = layout.scrollArea;
+  const cardS = layout.cardS;
+  const gap = layout.gap;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(area.x - 4, area.y - 2, area.w + 8, area.h + 4);
+  ctx.clip();
+
+  cards.forEach(function (card, index) {
+    const col = index % layout.columns;
+    const row = Math.floor(index / layout.columns);
+    const cardX = area.x + col * (cardS + gap);
+    const cardY = area.y + row * (cardS + gap) - scrollY;
+    if (cardY + cardS < area.y - 6 || cardY > area.y + area.h + 6) {
+      return;
+    }
+    modalCardHitAreas.push({ x: cardX, y: cardY, w: cardS, h: cardS, card: card, index: index });
+    drawMiniCard(card, cardX, cardY, cardS, cardS);
+  });
+
+  ctx.restore();
+  drawDeckViewerFade(area);
+}
+
+function drawDeckViewerFade(area) {
+  const fadeH = 5;
+  const top = ctx.createLinearGradient(0, area.y, 0, area.y + fadeH);
+  top.addColorStop(0, "rgba(7, 11, 20, 0.42)");
+  top.addColorStop(1, "rgba(7, 11, 20, 0)");
+  ctx.fillStyle = top;
+  ctx.fillRect(area.x - 6, area.y - 1, area.w + 12, fadeH + 1);
+
+  const bottom = ctx.createLinearGradient(0, area.y + area.h - fadeH, 0, area.y + area.h);
+  bottom.addColorStop(0, "rgba(7, 11, 20, 0)");
+  bottom.addColorStop(1, "rgba(7, 11, 20, 0.42)");
+  ctx.fillStyle = bottom;
+  ctx.fillRect(area.x - 6, area.y + area.h - fadeH, area.w + 12, fadeH + 1);
 }
 
 function drawActiveEffectModal(width, height) {
@@ -6015,16 +6278,16 @@ function drawQueue(side, x, y, width, height) {
 function drawCardSlot(rect, isAi) {
   const border = getBattleBorderOptions({ lineWidth: 1.5, cornerRadius: 6, glowBrightness: 0 });
   const strokeColor = isAi ? "255, 168, 196" : "94, 231, 255";
-  ctx.fillStyle = "rgba(7, 11, 22, 0.48)";
-  ctx.strokeStyle = "rgba(" + strokeColor + ", 0.22)";
+  ctx.fillStyle = "rgba(4, 7, 14, 0.45)";
+  ctx.strokeStyle = "rgba(" + strokeColor + ", 0.16)";
   ctx.lineWidth = border.lineWidth;
-  ctx.shadowColor = "rgba(" + strokeColor + ", 0.45)";
+  ctx.shadowColor = "rgba(" + strokeColor + ", 0.18)";
   ctx.shadowBlur = 5 * border.glowBrightness;
   roundRect(rect.x, rect.y, rect.w, rect.h, border.cornerRadius, true, true);
   ctx.shadowColor = "transparent";
   ctx.shadowBlur = 0;
 
-  ctx.strokeStyle = "rgba(" + strokeColor + ", 0.12)";
+  ctx.strokeStyle = "rgba(" + strokeColor + ", 0.08)";
   ctx.lineWidth = Math.max(0.5, border.lineWidth * 0.66);
   roundRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, Math.max(0, border.cornerRadius - 2), false, true);
 }
@@ -6105,7 +6368,7 @@ function drawMiniCard(card, x, y, w, h) {
   if (edge < 4) {
     return;
   }
-  const border = getBattleBorderOptions({ lineWidth: 2.5, cornerRadius: 6, glowBrightness: 1 });
+  const border = getBattleBorderOptions({ lineWidth: 1.7, cornerRadius: 6, glowBrightness: 0.5 });
   const sx = x + (w - edge) / 2;
   const sy = y + (h - edge) / 2;
 
@@ -6117,8 +6380,8 @@ function drawMiniCard(card, x, y, w, h) {
     ctx.globalAlpha = 0.78;
   }
 
-  ctx.shadowColor = "rgba(0, 0, 0, 0.38)";
-  ctx.shadowBlur = 5 * border.glowBrightness;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.52)";
+  ctx.shadowBlur = 7 * border.glowBrightness;
   ctx.shadowOffsetY = 2;
 
   let outerFill;
@@ -6134,11 +6397,11 @@ function drawMiniCard(card, x, y, w, h) {
     mainColor = isBomb ? "rgba(184, 132, 28, 0.96)" : "rgba(110, 82, 18, 0.94)";
     effBottomColor = isBomb ? mainColor : "rgba(92, 72, 22, 0.72)";
   } else {
-    outerFill = isBomb ? "#220b16" : THEME.paper;
-    outerStroke = isBomb ? THEME.danger : THEME.cyan;
-    innerFill = isBomb ? "rgba(42, 10, 24, 0.55)" : "#f6f8fd";
-    mainColor = isBomb ? THEME.danger : "#111827";
-    effBottomColor = isBomb ? THEME.danger : "rgba(17, 24, 39, 0.68)";
+    outerFill = isBomb ? "#1a0710" : "#dfe7f2";
+    outerStroke = isBomb ? "rgba(255, 75, 97, 0.92)" : "rgba(94, 231, 255, 0.76)";
+    innerFill = isBomb ? "rgba(32, 8, 18, 0.72)" : "#f3f6fb";
+    mainColor = isBomb ? "#ff5368" : "#111827";
+    effBottomColor = isBomb ? "#ff5368" : "rgba(29, 39, 56, 0.72)";
   }
 
   ctx.fillStyle = outerFill;
@@ -6153,6 +6416,10 @@ function drawMiniCard(card, x, y, w, h) {
   const innerRadius = Math.max(2, border.cornerRadius - 2);
   ctx.fillStyle = innerFill;
   roundRect(sx + inset, sy + inset, edge - inset * 2, edge - inset * 2, innerRadius, true, false);
+
+  ctx.strokeStyle = isBomb ? "rgba(255, 255, 255, 0.08)" : "rgba(17, 24, 39, 0.12)";
+  ctx.lineWidth = 1;
+  roundRect(sx + inset + 2, sy + inset + 2, edge - inset * 2 - 4, edge - inset * 2 - 4, Math.max(1, innerRadius - 2), false, true);
 
   ctx.textAlign = "center";
   const mainText = isBomb ? "X" : String(getCardDisplayValue(card));
@@ -6483,6 +6750,18 @@ function draw() {
 function startGameShell() {
   initTestWinOverlay();
   tap.onTouchStart(handleTouch);
+  if (typeof tap.onTouchMove === "function") {
+    tap.onTouchMove(handlePointerMove);
+  }
+  if (typeof tap.onTouchEnd === "function") {
+    tap.onTouchEnd(handlePointerEnd);
+  }
+  if (canvas && canvas.addEventListener) {
+    canvas.addEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("pointerup", handlePointerEnd);
+    canvas.addEventListener("pointercancel", handlePointerEnd);
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+  }
   draw();
 }
 
