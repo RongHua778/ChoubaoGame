@@ -313,8 +313,8 @@ const DEFAULT_BORDER_LAYOUT = {
   glowBrightness: 1
 };
 const DEFAULT_TITLE_MENU_LAYOUT = {
-  logoMaxWidthRatio: 0.92,
-  logoMaxWidthCap: 380,
+  logoMaxWidthRatio: 0.78,
+  logoMaxWidthCap: 320,
   logoTopRatio: 0.105,
   /** 「开始游戏」宽度：draw = 与控制区左侧「抽牌」同宽（默认水平居中）；full = 与控制区整条同宽（左右 margin 与控制区一致） */
   startButtonWidthMode: "draw",
@@ -357,6 +357,7 @@ let winScoreSlotPulse = null;
 let roundLabelPulseAt = 0;
 let hpRecoverPulse = { player: null, ai: null };
 let matchVictoryRewardAt = 0;
+let routeMapEnteredAt = 0;
 let cardsCatalogEntries = null;
 let catalogById = {};
 let thiefDeckCardIds = null;
@@ -3166,6 +3167,7 @@ function enterBackstage() {
 function enterRouteMap() {
   ensureRunState();
   scene = "routeMap";
+  routeMapEnteredAt = Date.now();
   modal = null;
   modalStack = [];
   buttons = {};
@@ -3839,11 +3841,11 @@ function drawBackground(width, height) {
 
 function drawTitle(width, height) {
   buttons = {};
-  drawBackground(width, height);
+  drawTitleAtmosphere(width, height);
   const lm = getTitleMenuLayout();
   const hasLogoImage = drawTitleLogo(width, height);
   if (!hasLogoImage && lm.fallbackLogoTextWhenNoImage) {
-    drawCenteredText(lm.fallbackLogoTextWhenNoImage, width / 2, height * 0.28, 40, THEME.text, "bold");
+    drawCenteredText(lm.fallbackLogoTextWhenNoImage, width / 2, height * 0.22, 40, THEME.text, "bold");
   }
 
   buttons.titleStart = getTitleStartButtonRect(width, height);
@@ -3860,7 +3862,7 @@ function drawTitle(width, height) {
     );
   }
 
-  drawButton(buttons.titleStart, "开始游戏", canStart ? THEME.button : "#3b3f52", "#120613", canStart);
+  drawTitleStartButton(buttons.titleStart, canStart);
 }
 
 function drawTitleLogo(width, height) {
@@ -3881,11 +3883,169 @@ function drawTitleLogo(width, height) {
   const logoY = height * lm.logoTopRatio;
 
   ctx.save();
-  ctx.shadowColor = "rgba(126, 74, 255, 0.42)";
-  ctx.shadowBlur = 18;
+  ctx.globalAlpha = 0.96;
+  ctx.shadowColor = "rgba(73, 214, 255, 0.32)";
+  ctx.shadowBlur = 22;
   ctx.drawImage(titleLogo.image, logoX, logoY, logoW, logoH);
+  ctx.globalCompositeOperation = "screen";
+  ctx.globalAlpha = 0.18 + Math.sin(pulse * 0.8) * 0.04;
+  ctx.drawImage(titleLogo.image, logoX - 1.2, logoY, logoW, logoH);
+  ctx.drawImage(titleLogo.image, logoX + 1.2, logoY, logoW, logoH);
   ctx.restore();
   return true;
+}
+
+function drawTitleAtmosphere(width, height) {
+  const bg = ctx.createLinearGradient(0, 0, 0, height);
+  bg.addColorStop(0, "#080b12");
+  bg.addColorStop(0.42, "#0a1018");
+  bg.addColorStop(0.74, "#05070c");
+  bg.addColorStop(1, "#020306");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  const table = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.56,
+    Math.min(width, height) * 0.08,
+    width * 0.5,
+    height * 0.56,
+    Math.max(width, height) * 0.72
+  );
+  table.addColorStop(0, "rgba(35, 70, 72, 0.34)");
+  table.addColorStop(0.35, "rgba(14, 32, 39, 0.58)");
+  table.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = table;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.save();
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.26)";
+  ctx.lineWidth = 1;
+  const grid = Math.max(18, Math.min(28, width * 0.058));
+  const drift = (pulse * 4) % grid;
+  for (let x = -grid + drift; x < width + grid; x += grid) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x - width * 0.16, height);
+    ctx.stroke();
+  }
+  for (let y = height * 0.2; y < height; y += grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y - width * 0.16);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  drawTitleCardShadows(width, height);
+  drawTitleSurveillanceLines(width, height);
+
+  const vignette = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.42,
+    Math.min(width, height) * 0.16,
+    width * 0.5,
+    height * 0.5,
+    Math.max(width, height) * 0.76
+  );
+  vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
+  vignette.addColorStop(0.68, "rgba(0, 0, 0, 0.22)");
+  vignette.addColorStop(1, "rgba(0, 0, 0, 0.82)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 255, 255, 0.035)";
+  for (let y = 0; y < height; y += 5) {
+    ctx.fillRect(0, y, width, 1);
+  }
+  ctx.restore();
+}
+
+function drawTitleCardShadows(width, height) {
+  const cards = [
+    { x: width * 0.07, y: height * 0.49, w: width * 0.22, a: -0.26, alpha: 0.36 },
+    { x: width * 0.72, y: height * 0.43, w: width * 0.2, a: 0.2, alpha: 0.3 },
+    { x: width * 0.18, y: height * 0.66, w: width * 0.18, a: 0.16, alpha: 0.2 },
+    { x: width * 0.63, y: height * 0.68, w: width * 0.24, a: -0.18, alpha: 0.22 }
+  ];
+
+  cards.forEach(function (card, index) {
+    const h = card.w * 1.42;
+    ctx.save();
+    ctx.translate(card.x + card.w / 2, card.y + h / 2);
+    ctx.rotate(card.a + Math.sin(pulse * 0.45 + index) * 0.01);
+    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = "rgba(6, 10, 16, " + card.alpha + ")";
+    ctx.strokeStyle = index % 2 ? "rgba(240, 93, 143, 0.16)" : "rgba(94, 231, 255, 0.18)";
+    ctx.lineWidth = 1.2;
+    roundRect(-card.w / 2, -h / 2, card.w, h, 7, true, true);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    roundRect(-card.w / 2 + 6, -h / 2 + 6, card.w - 12, h - 12, 4, false, true);
+    ctx.restore();
+  });
+}
+
+function drawTitleSurveillanceLines(width, height) {
+  ctx.save();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.22)";
+  ctx.fillStyle = "rgba(94, 231, 255, 0.42)";
+
+  const points = [
+    [width * 0.12, height * 0.34],
+    [width * 0.34, height * 0.48],
+    [width * 0.62, height * 0.39],
+    [width * 0.84, height * 0.56],
+    [width * 0.44, height * 0.72],
+    [width * 0.17, height * 0.61]
+  ];
+
+  ctx.beginPath();
+  points.forEach(function (point, index) {
+    if (index === 0) {
+      ctx.moveTo(point[0], point[1]);
+    } else {
+      ctx.lineTo(point[0], point[1]);
+    }
+  });
+  ctx.stroke();
+
+  points.forEach(function (point, index) {
+    const radius = index === 2 ? 3.4 : 2.4;
+    ctx.globalAlpha = 0.58 + Math.sin(pulse * 0.9 + index) * 0.18;
+    ctx.beginPath();
+    ctx.arc(point[0], point[1], radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawTitleStartButton(rect, enabled) {
+  const glow = enabled ? "rgba(94, 231, 255, 0.5)" : "rgba(59, 63, 82, 0.38)";
+  const fill = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+  fill.addColorStop(0, enabled ? "#102d38" : "#242839");
+  fill.addColorStop(0.52, enabled ? "#1fe0d0" : "#3b3f52");
+  fill.addColorStop(1, enabled ? "#f05d8f" : "#2a2f3f");
+
+  ctx.save();
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = enabled ? 18 : 7;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = enabled ? "rgba(244, 247, 255, 0.92)" : "rgba(143, 155, 181, 0.46)";
+  ctx.lineWidth = 1.5;
+  roundRect(rect.x, rect.y, rect.w, rect.h, 8, true, true);
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = enabled ? "rgba(2, 3, 6, 0.62)" : "rgba(255, 255, 255, 0.08)";
+  ctx.lineWidth = 1;
+  roundRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 5, false, true);
+
+  drawCenteredText(enabled ? "开始博弈" : "读取牌局", rect.x + rect.w / 2, rect.y + rect.h / 2 + 6, 15, enabled ? "#020306" : "rgba(244, 247, 255, 0.58)", "bold");
+  ctx.restore();
 }
 
 function drawVictoryRewardModal(width, height) {
@@ -4091,11 +4251,11 @@ function drawRouteMap(width, height) {
   routeNodeHitAreas = [];
   shopCardHitAreas = [];
   shopBuyButtonHitAreas = [];
-  drawBackground(width, height);
+  drawRouteBackground(width, height);
 
   const bottomBar = getRunBottomBarRect(width, height);
   const routeTitleY = height * 0.085 + 10;
-  drawCenteredText("挑战路线", width / 2, routeTitleY, 24, THEME.text, "bold");
+  drawRouteHeader(width, routeTitleY);
   ensureRunState();
   const routeRoundCurrent = Math.min(RUN_BOSS_ROUNDS, (runState.bossesDefeated || 0) + 1);
   drawCenteredText(
@@ -4116,6 +4276,8 @@ function drawRouteMap(width, height) {
   };
 
   const positions = computeRouteNodePositions(mapArea);
+  const revealNow = Date.now();
+  drawRouteConnections(positions, revealNow);
 
   const nodes = flattenRouteNodes();
   nodes.forEach(function (node) {
@@ -4123,11 +4285,108 @@ function drawRouteMap(width, height) {
     if (!pos) {
       return;
     }
-    drawRouteNode(node, pos);
+    drawRouteNode(node, pos, getRouteNodeRevealProgress(node, revealNow));
     routeNodeHitAreas.push({ node: node, cx: pos.cx, cy: pos.cy, rx: pos.rx, ry: pos.ry });
   });
 
   drawRunBottomBar(width, height);
+}
+
+function getRouteNodeRevealProgress(node, now) {
+  if (!routeMapEnteredAt) {
+    return 1;
+  }
+  const rowDelay = Math.max(0, node.rowIndex || 0) * 92;
+  const colDelay = Math.abs((node.colIndex || 0) - 1) * 24;
+  const elapsed = now - routeMapEnteredAt - rowDelay - colDelay;
+  return easeOutBack(clamp(elapsed / 320, 0, 1));
+}
+
+function drawRouteBackground(width, height) {
+  drawTitleAtmosphere(width, height);
+
+  ctx.save();
+  const focus = ctx.createRadialGradient(
+    width * 0.5,
+    height * 0.47,
+    Math.min(width, height) * 0.1,
+    width * 0.5,
+    height * 0.48,
+    Math.max(width, height) * 0.55
+  );
+  focus.addColorStop(0, "rgba(94, 231, 255, 0.15)");
+  focus.addColorStop(0.42, "rgba(20, 48, 58, 0.2)");
+  focus.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = focus;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = "rgba(240, 93, 143, 0.1)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(width * 0.08, height * 0.82);
+  ctx.lineTo(width * 0.92, height * 0.18);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRouteHeader(width, y) {
+  ctx.save();
+  ctx.shadowColor = "rgba(94, 231, 255, 0.34)";
+  ctx.shadowBlur = 16;
+  drawCenteredText("挑战路线", width / 2, y, 24, THEME.text, "bold");
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.32)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(width * 0.32, y + 12);
+  ctx.lineTo(width * 0.68, y + 12);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRouteConnections(positions, now) {
+  ensureRunState();
+  const rows = runState.routeRows || [];
+
+  ctx.save();
+  rows.forEach(function (row) {
+    row.forEach(function (node) {
+      const from = positions[node.id];
+      if (!from) {
+        return;
+      }
+      getAdjacentRouteNodes(node).forEach(function (nextNode) {
+        const to = positions[nextNode.id];
+        if (!to) {
+          return;
+        }
+        const reveal = getRouteNodeRevealProgress(nextNode, now);
+        if (reveal <= 0.01) {
+          return;
+        }
+        const selectable = canSelectRouteNode(nextNode);
+        const visited = runState.visitedRouteNodeIds.indexOf(node.id) >= 0;
+        const lineAlpha = Math.min(1, reveal);
+        ctx.strokeStyle = selectable
+          ? "rgba(94, 231, 255, " + 0.62 * lineAlpha + ")"
+          : visited
+            ? "rgba(94, 231, 255, " + 0.34 * lineAlpha + ")"
+            : "rgba(94, 231, 255, " + 0.12 * lineAlpha + ")";
+        ctx.shadowColor = selectable ? "rgba(94, 231, 255, 0.42)" : "transparent";
+        ctx.shadowBlur = selectable ? 10 * lineAlpha : 0;
+        ctx.lineWidth = selectable ? 2 : 1;
+        const fromX = from.cx;
+        const fromY = from.cy - from.ry * 0.72;
+        const toX = to.cx;
+        const toY = to.cy + to.ry * 0.72;
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(lerp(fromX, toX, lineAlpha), lerp(fromY, toY, lineAlpha));
+        ctx.stroke();
+      });
+    });
+  });
+  ctx.restore();
 }
 
 function computeRouteNodePositions(mapArea) {
@@ -4203,70 +4462,99 @@ function drawRouteNodeMinimalIcon(nodeType, cx, cy, r, strokeStyle) {
   ctx.save();
   ctx.strokeStyle = strokeStyle;
   ctx.fillStyle = strokeStyle;
-  ctx.lineWidth = Math.max(1.1, r * 0.085);
+  ctx.lineWidth = Math.max(1.3, r * 0.1);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
   if (nodeType === ROUTE_NODE_NORMAL) {
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.52, cy - r * 0.5);
-    ctx.lineTo(cx + r * 0.52, cy + r * 0.5);
-    ctx.moveTo(cx + r * 0.52, cy - r * 0.5);
-    ctx.lineTo(cx - r * 0.52, cy + r * 0.5);
+    ctx.moveTo(cx - r * 0.48, cy - r * 0.46);
+    ctx.lineTo(cx + r * 0.48, cy + r * 0.46);
+    ctx.moveTo(cx + r * 0.48, cy - r * 0.46);
+    ctx.lineTo(cx - r * 0.48, cy + r * 0.46);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.18, 0, Math.PI * 2);
     ctx.stroke();
   } else if (nodeType === ROUTE_NODE_ELITE) {
     ctx.beginPath();
-    ctx.moveTo(cx + r * 0.16, cy - r * 0.58);
-    ctx.lineTo(cx - r * 0.3, cy - r * 0.02);
-    ctx.lineTo(cx + r * 0.06, cy - r * 0.02);
-    ctx.lineTo(cx - r * 0.2, cy + r * 0.58);
+    ctx.moveTo(cx + r * 0.1, cy - r * 0.62);
+    ctx.lineTo(cx - r * 0.36, cy + r * 0.02);
+    ctx.lineTo(cx + r * 0.02, cy + r * 0.02);
+    ctx.lineTo(cx - r * 0.12, cy + r * 0.62);
+    ctx.lineTo(cx + r * 0.42, cy - r * 0.14);
+    ctx.lineTo(cx + r * 0.04, cy - r * 0.14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.42, cy + r * 0.56);
+    ctx.lineTo(cx + r * 0.24, cy + r * 0.56);
     ctx.stroke();
   } else if (nodeType === ROUTE_NODE_EVENT) {
     ctx.beginPath();
-    ctx.moveTo(cx, cy - r * 0.55);
-    ctx.lineTo(cx, cy + r * 0.06);
+    ctx.moveTo(cx, cy - r * 0.58);
+    ctx.lineTo(cx + r * 0.44, cy - r * 0.12);
+    ctx.lineTo(cx, cy + r * 0.34);
+    ctx.lineTo(cx - r * 0.44, cy - r * 0.12);
+    ctx.closePath();
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(cx, cy + r * 0.36, r * 0.1, 0, Math.PI * 2);
+    ctx.moveTo(cx, cy - r * 0.26);
+    ctx.lineTo(cx, cy + r * 0.04);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy + r * 0.18, r * 0.055, 0, Math.PI * 2);
     ctx.fill();
   } else if (nodeType === ROUTE_NODE_SHOP) {
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.46, cy - r * 0.26);
-    ctx.quadraticCurveTo(cx - r * 0.5, cy + r * 0.4, cx, cy + r * 0.46);
-    ctx.quadraticCurveTo(cx + r * 0.5, cy + r * 0.4, cx + r * 0.46, cy - r * 0.26);
+    ctx.moveTo(cx - r * 0.52, cy - r * 0.16);
+    ctx.lineTo(cx - r * 0.38, cy - r * 0.42);
+    ctx.lineTo(cx + r * 0.38, cy - r * 0.42);
+    ctx.lineTo(cx + r * 0.52, cy - r * 0.16);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.2, cy - r * 0.26);
-    ctx.quadraticCurveTo(cx, cy - r * 0.58, cx + r * 0.2, cy - r * 0.26);
-    ctx.stroke();
-  } else if (nodeType === ROUTE_NODE_BOSS) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.44, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.19, 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (nodeType === ROUTE_NODE_BOSS_BEATEN) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.44, 0, Math.PI * 2);
+    ctx.moveTo(cx - r * 0.42, cy - r * 0.12);
+    ctx.lineTo(cx - r * 0.32, cy + r * 0.42);
+    ctx.lineTo(cx + r * 0.32, cy + r * 0.42);
+    ctx.lineTo(cx + r * 0.42, cy - r * 0.12);
+    ctx.closePath();
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.19, 0, Math.PI * 2);
+    ctx.moveTo(cx - r * 0.18, cy - r * 0.12);
+    ctx.quadraticCurveTo(cx, cy + r * 0.08, cx + r * 0.18, cy - r * 0.12);
+    ctx.stroke();
+  } else if (nodeType === ROUTE_NODE_BOSS || nodeType === ROUTE_NODE_BOSS_BEATEN) {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.5, cy + r * 0.22);
+    ctx.lineTo(cx - r * 0.34, cy - r * 0.34);
+    ctx.lineTo(cx - r * 0.08, cy + r * 0.02);
+    ctx.lineTo(cx + r * 0.18, cy - r * 0.44);
+    ctx.lineTo(cx + r * 0.42, cy + r * 0.22);
+    ctx.closePath();
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.5, cy - r * 0.5);
-    ctx.lineTo(cx + r * 0.5, cy + r * 0.5);
+    ctx.moveTo(cx - r * 0.36, cy + r * 0.42);
+    ctx.lineTo(cx + r * 0.34, cy + r * 0.42);
     ctx.stroke();
+    if (nodeType === ROUTE_NODE_BOSS_BEATEN) {
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.48, cy - r * 0.48);
+      ctx.lineTo(cx + r * 0.48, cy + r * 0.48);
+      ctx.stroke();
+    }
   } else if (nodeType === ROUTE_NODE_START) {
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.1, cy - r * 0.5);
-    ctx.lineTo(cx - r * 0.1, cy + r * 0.5);
+    ctx.moveTo(cx - r * 0.34, cy - r * 0.56);
+    ctx.lineTo(cx - r * 0.34, cy + r * 0.54);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx - r * 0.06, cy - r * 0.44);
-    ctx.lineTo(cx + r * 0.46, cy - r * 0.2);
-    ctx.lineTo(cx - r * 0.06, cy + r * 0.06);
+    ctx.moveTo(cx - r * 0.28, cy - r * 0.48);
+    ctx.lineTo(cx + r * 0.38, cy - r * 0.22);
+    ctx.lineTo(cx - r * 0.28, cy + r * 0.06);
     ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.48, cy + r * 0.56);
+    ctx.lineTo(cx + r * 0.36, cy + r * 0.56);
     ctx.stroke();
   } else {
     ctx.beginPath();
@@ -4277,25 +4565,60 @@ function drawRouteNodeMinimalIcon(nodeType, cx, cy, r, strokeStyle) {
   ctx.restore();
 }
 
-function drawRouteNode(node, pos) {
+function drawRouteDiamondPath(cx, cy, rx, ry, inset) {
+  const dx = Math.max(0, rx - inset);
+  const dy = Math.max(0, ry - inset);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - dy);
+  ctx.lineTo(cx + dx, cy);
+  ctx.lineTo(cx, cy + dy);
+  ctx.lineTo(cx - dx, cy);
+  ctx.closePath();
+}
+
+function drawRouteNode(node, pos, revealProgress) {
+  const reveal = clamp(revealProgress == null ? 1 : revealProgress, 0, 1.08);
+  if (reveal <= 0.01) {
+    return;
+  }
   const visited = runState.visitedRouteNodeIds.indexOf(node.id) >= 0;
   const selectable = canSelectRouteNode(node);
+  const isBoss = node.type === ROUTE_NODE_BOSS || node.type === ROUTE_NODE_BOSS_BEATEN;
+  const accent = isBoss ? "rgba(240, 93, 143, 0.95)" : selectable ? "rgba(94, 231, 255, 0.95)" : "rgba(94, 231, 255, 0.26)";
+  const fill = ctx.createLinearGradient(pos.cx - pos.rx, pos.cy - pos.ry, pos.cx + pos.rx, pos.cy + pos.ry);
+  fill.addColorStop(0, visited ? "rgba(73, 104, 119, 0.82)" : "rgba(9, 14, 27, 0.94)");
+  fill.addColorStop(0.58, selectable ? "rgba(14, 31, 45, 0.98)" : "rgba(13, 17, 31, 0.92)");
+  fill.addColorStop(1, isBoss ? "rgba(45, 15, 36, 0.82)" : "rgba(5, 8, 15, 0.9)");
 
   ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(pos.cx, pos.cy - pos.ry);
-  ctx.lineTo(pos.cx + pos.rx, pos.cy);
-  ctx.lineTo(pos.cx, pos.cy + pos.ry);
-  ctx.lineTo(pos.cx - pos.rx, pos.cy);
-  ctx.closePath();
-  ctx.fillStyle = visited ? ROUTE_CELL_FILL_VISITED : ROUTE_CELL_FILL_DEFAULT;
-  ctx.strokeStyle = selectable ? ROUTE_CELL_BORDER : ROUTE_CELL_BORDER_DIM;
-  ctx.lineWidth = selectable ? 3 : 2;
+  ctx.globalAlpha *= Math.min(1, reveal);
+  ctx.translate(pos.cx, pos.cy + (1 - Math.min(1, reveal)) * 16);
+  ctx.scale(0.82 + Math.min(1, reveal) * 0.18, 0.82 + Math.min(1, reveal) * 0.18);
+  ctx.translate(-pos.cx, -pos.cy);
+  ctx.shadowColor = selectable ? accent : "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = selectable ? 18 : 8;
+  ctx.shadowOffsetY = selectable ? 0 : 3;
+  drawRouteDiamondPath(pos.cx, pos.cy, pos.rx, pos.ry, 0);
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = selectable ? 3 : 1.4;
   ctx.fill();
   ctx.stroke();
-  ctx.restore();
 
-  const labelColor = selectable ? THEME.text : ROUTE_CELL_TEXT_DIM;
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = selectable ? "rgba(244, 247, 255, 0.42)" : "rgba(244, 247, 255, 0.08)";
+  ctx.lineWidth = 1;
+  drawRouteDiamondPath(pos.cx, pos.cy, pos.rx, pos.ry, 7);
+  ctx.stroke();
+
+  if (selectable) {
+    ctx.strokeStyle = "rgba(94, 231, 255, 0.26)";
+    ctx.lineWidth = 1;
+    drawRouteDiamondPath(pos.cx, pos.cy, pos.rx, pos.ry, Math.min(pos.rx, pos.ry) * (0.28 + Math.sin(pulse) * 0.04));
+    ctx.stroke();
+  }
+
+  const labelColor = selectable || visited ? THEME.text : ROUTE_CELL_TEXT_DIM;
   const iconR = Math.min(pos.rx, pos.ry) * ROUTE_NODE_ICON_RADIUS_FACTOR;
   const iconCy = pos.cy + pos.ry * ROUTE_NODE_ICON_CENTER_OFFSET_Y_RATIO;
   drawRouteNodeMinimalIcon(node.type, pos.cx, iconCy, iconR, labelColor);
@@ -4309,6 +4632,7 @@ function drawRouteNode(node, pos) {
     labelColor,
     "bold"
   );
+  ctx.restore();
 }
 
 function drawOpponentSelect(width, height) {
@@ -4347,14 +4671,29 @@ function getRunBottomBarRect(width, height) {
 function drawRunBottomBar(width, height) {
   ensureRunState();
   const bar = getRunBottomBarRect(width, height);
-  drawPanel(bar, THEME.panel);
-  drawPanelRim(bar, THEME.panelEdgeCool);
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.48)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 0;
+  const fill = ctx.createLinearGradient(0, bar.y, 0, bar.y + bar.h);
+  fill.addColorStop(0, "rgba(7, 12, 22, 0.9)");
+  fill.addColorStop(1, "rgba(5, 8, 15, 0.94)");
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.34)";
+  ctx.lineWidth = 1.2;
+  roundRect(bar.x, bar.y, bar.w, bar.h, 7, true, true);
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(244, 247, 255, 0.07)";
+  ctx.lineWidth = 1;
+  roundRect(bar.x + 6, bar.y + 6, bar.w - 12, bar.h - 12, 4, false, true);
+  ctx.restore();
 
   ctx.textAlign = "left";
-  drawText("我的金币：" + runState.gold, bar.x + 18, bar.y + 48, 18, THEME.gold, "bold");
+  drawText("我的金币：" + runState.gold, bar.x + 18, bar.y + 47, 17, "rgba(255, 224, 113, 0.88)", "bold");
 
   buttons.runDeck = { x: bar.x + bar.w - 82, y: bar.y + 16, w: 64, h: 40 };
-  drawPileButtonFace(buttons.runDeck, "牌库", runState.deck.length);
+  drawPileButtonFace(buttons.runDeck, "牌库", runState.deck.length, "rgba(94, 231, 255, 0.5)");
 }
 
 function drawCardGrid(cards, x, y, width, height, viewportWidth, viewportHeight, hitAreas, gridOptions) {
@@ -6004,6 +6343,13 @@ function drawThresholdPoint(x, y, radius, filled, color) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function easeOutBack(t) {
+  const p = clamp(t, 0, 1);
+  const c1 = 1.25;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
 }
 
 function lerp(start, end, t) {
