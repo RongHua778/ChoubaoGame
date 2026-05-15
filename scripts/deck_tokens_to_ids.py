@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""将 Data 下卡组 JSON 的 cardIds（数字 catalog id）改为与 cards.json 一致的中文牌名字符串（炸弹→「炸弹」）。"""
+"""将 Data 下卡组 JSON 的 cardIds 规范化为数字 catalog id。
+
+旧版中文牌名仍可迁移；「炸弹」→ 0。推荐卡组文件长期保存数字 ID，
+这样修改 cards.json/carddesign.xlsx 里的展示名不会影响卡组解析和技能绑定。
+"""
 from __future__ import annotations
 
 import json
@@ -15,7 +19,7 @@ def main() -> None:
         print("缺少 {}".format(CARDS_PATH), file=sys.stderr)
         sys.exit(1)
     catalog = json.loads(CARDS_PATH.read_text(encoding="utf-8"))
-    id_to_name: dict[int, str] = {}
+    name_to_id: dict[str, int] = {"炸弹": 0}
     for row in catalog.get("cards") or []:
         if not isinstance(row, dict):
             continue
@@ -25,12 +29,23 @@ def main() -> None:
         if isinstance(card, dict) and isinstance(card.get("displayName"), str):
             dn = card["displayName"].strip()
         if isinstance(cid, int) and dn:
-            id_to_name[cid] = dn
+            name_to_id.setdefault(dn, cid)
 
-    def token_for_nid(n: int) -> str | None:
-        if n == 0:
-            return "炸弹"
-        return id_to_name.get(n)
+    def id_for_token(token) -> int | None:
+        if isinstance(token, bool):
+            return None
+        if isinstance(token, int):
+            return token
+        if isinstance(token, float) and token == int(token):
+            return int(token)
+        if isinstance(token, str):
+            s = token.strip()
+            if not s:
+                return None
+            if s.lstrip("-").isdigit():
+                return int(s)
+            return name_to_id.get(s)
+        return None
 
     deck_root = ROOT / "Data" / "Decks"
     for path in sorted(deck_root.rglob("*.json")):
@@ -40,21 +55,11 @@ def main() -> None:
             continue
         new_list: list = []
         for x in ids:
-            if isinstance(x, str):
-                new_list.append(x.strip() if x.strip() else x)
-                continue
-            if isinstance(x, bool):
-                continue
-            if isinstance(x, int):
-                t = token_for_nid(x)
-            elif isinstance(x, float) and x == int(x):
-                t = token_for_nid(int(x))
-            else:
-                t = None
-            if not t:
-                print("跳过 {}：未知 id {}".format(path.relative_to(ROOT), x), file=sys.stderr)
+            cid = id_for_token(x)
+            if cid is None:
+                print("跳过 {}：未知卡牌 {}".format(path.relative_to(ROOT), x), file=sys.stderr)
                 sys.exit(1)
-            new_list.append(t)
+            new_list.append(cid)
         data["cardIds"] = new_list
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("已重写 {}".format(path.relative_to(ROOT)))

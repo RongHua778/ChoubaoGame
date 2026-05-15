@@ -24,6 +24,51 @@ UNLOCK_COLUMN = "是否解锁"
 # 「牌名列」或与数据表一致的「牌名」，用于卡组表按中文名解析与 UI 展示
 NAME_COLUMNS = ("牌名列", "牌名")
 
+EFFECT_BY_CARD_ID = {
+    4: "ambush",
+    5: "copy",
+    6: "bruiser",
+    7: "vanguard",
+    8: "imp",
+    9: "divineLight",
+    10: "shield",
+    11: "chieftain",
+    12: "steal",
+    13: "bluff",
+    14: "intimidate",
+    15: "leech",
+    16: "flood",
+    17: "pollute",
+    18: "menace",
+    19: "incite",
+    20: "wasteland",
+    21: "poisonSource",
+    22: "leakSecrets",
+}
+
+EFFECT_BY_NAME = {
+    "偷窃": "steal",
+    "虚张": "bluff",
+    "恐吓": "intimidate",
+    "陷阱": "ambush",
+    "复制": "copy",
+    "莽夫": "bruiser",
+    "先锋": "vanguard",
+    "小鬼": "imp",
+    "圣光": "divineLight",
+    "回收": "shield",
+    "首领": "chieftain",
+    "魅魔": "leech",
+    "掀桌": "flood",
+    "污染": "pollute",
+    "贷款": "menace",
+    "勾引": "incite",
+    "怂恿": "incite",
+    "废土": "wasteland",
+    "毒源": "poisonSource",
+    "泄密": "leakSecrets",
+}
+
 
 def _cell_str(val) -> str:
     if val is None:
@@ -118,45 +163,9 @@ def row_to_entry(row: dict, unlocked: bool) -> dict | None:
         card = {"type": "bomb", "value": 0}
     else:
         card = {"type": "score", "value": base_score}
-        if effect_name in ("偷窃",):
-            card["effect"] = "steal"
-        elif effect_name in ("虚张",):
-            card["effect"] = "bluff"
-        elif effect_name in ("恐吓",):
-            card["effect"] = "intimidate"
-        elif effect_name in ("陷阱",):
-            card["effect"] = "ambush"
-        elif effect_name in ("复制",):
-            card["effect"] = "copy"
-        elif effect_name in ("莽夫",):
-            card["effect"] = "bruiser"
-        elif effect_name in ("先锋",):
-            card["effect"] = "vanguard"
-        elif effect_name in ("小鬼",):
-            card["effect"] = "imp"
-        elif effect_name in ("圣光",):
-            card["effect"] = "divineLight"
-        elif effect_name in ("回收"):
-            card["effect"] = "shield"
-        elif effect_name in ("首领",):
-            card["effect"] = "chieftain"
-        elif effect_name in ("魅魔",):
-            card["effect"] = "leech"
-        elif effect_name in ("掀桌",):
-            card["effect"] = "flood"
-        elif effect_name in ("污染",):
-            card["effect"] = "pollute"
-        elif effect_name in ("贷款",):
-            # 引擎键 menace：对手每抽一张，本卡在队列中的计分 −1（见 EFFECT_MENACE）
-            card["effect"] = "menace"
-        elif effect_name in ("勾引", "怂恿"):
-            card["effect"] = "incite"
-        elif effect_name in ("废土",):
-            card["effect"] = "wasteland"
-        elif effect_name in ("毒源",):
-            card["effect"] = "poisonSource"
-        elif effect_name in ("泄密",):
-            card["effect"] = "leakSecrets"
+        effect_key = EFFECT_BY_CARD_ID.get(entry_id) or EFFECT_BY_NAME.get(effect_name)
+        if effect_key:
+            card["effect"] = effect_key
 
     name_col = ""
     for col in NAME_COLUMNS:

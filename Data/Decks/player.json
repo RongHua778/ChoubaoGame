@@ -2,18 +2,18 @@
   "version": 1,
   "deckId": "player",
   "name": "玩家卡组",
-  "description": "远征玩家牌库；cardIds 为中文牌名字符串数组，须与 Data/cards.json 中对应卡的 displayName 一致（炸弹写「炸弹」）；仍兼容数字 catalog id。",
+  "description": "远征玩家牌库；cardIds 为数字 catalog id 数组；0 表示炸弹；仍兼容旧版中文牌名。",
   "cardIds": [
-    "一分",
-    "一分",
-    "一分",
-    "一分",
-    "二分",
-    "二分",
-    "二分",
-    "三分",
-    "炸弹",
-    "炸弹",
-    "炸弹"
+    1,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    3,
+    0,
+    0,
+    0
   ]
 }

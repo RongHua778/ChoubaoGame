@@ -22,8 +22,30 @@ const EFFECT_INCITE = "incite";
 const EFFECT_WASTELAND = "wasteland";
 const EFFECT_POISON_SOURCE = "poisonSource";
 const EFFECT_LEAK_SECRETS = "leakSecrets";
+const CATALOG_EFFECT_BY_ID = {
+  4: EFFECT_AMBUSH,
+  5: EFFECT_COPY,
+  6: EFFECT_BRUISER,
+  7: EFFECT_VANGUARD,
+  8: EFFECT_IMP,
+  9: EFFECT_DIVINE_LIGHT,
+  10: EFFECT_SHIELD,
+  11: EFFECT_CHIEFTAIN,
+  12: EFFECT_STEAL,
+  13: EFFECT_BLUFF,
+  14: EFFECT_INTIMIDATE,
+  15: EFFECT_LEECH,
+  16: EFFECT_FLOOD,
+  17: EFFECT_POLLUTE,
+  18: EFFECT_MENACE,
+  19: EFFECT_INCITE,
+  20: EFFECT_WASTELAND,
+  21: EFFECT_POISON_SOURCE,
+  22: EFFECT_LEAK_SECRETS
+};
 const MAX_HP = 3;
 const WIN_TARGET = 3;
+const RUN_WIN_TARGETS_BY_BOSS_ROUND = [3, 4, 5];
 const QUEUE_LIMIT = 10;
 const QUEUE_COLUMNS = 5;
 const QUEUE_ROWS = 2;
@@ -168,6 +190,13 @@ const SHOP_REFRESH_STEP = 2;
 const VICTORY_BASE_GOLD = 5;
 const VICTORY_INTEREST_CAP = 5;
 const GOLD_PER_INTEREST_UNIT = 5;
+const VICTORY_REWARD_CARD_COUNT = 3;
+const VICTORY_REWARD_SKIP_CARD_GOLD = 2;
+const VICTORY_REWARD_GOLD_BY_NODE_TYPE = {
+  normal: 2,
+  elite: 5,
+  boss: 8
+};
 const MATCH_VICTORY_REWARD_DELAY_MS = 2000;
 const INTEREST_RULE_TEXT = "每5金币获得1利息，上限为5";
 const STARTING_GOLD = 0;
@@ -296,7 +325,7 @@ const EFFECTS = {
   },
   incite: {
     trigger: "active",
-    description: "主动：对手立即再抽一张牌（受停牌、队列上限与牌库限制）。"
+    description: "主动：对手立即再抽一张牌（受队列上限与牌库限制）。"
   },
   wasteland: {
     trigger: "passive",
@@ -356,10 +385,10 @@ const DEFAULT_OPPONENT_CHOICES = [
 const DEFAULT_THRESHOLD_LAYOUT = {
   labelOffsetX: 0,
   labelOffsetY: 0,
-  pointStartX: 38,
+  pointStartX: 46,
   pointOffsetY: -5,
   pointGap: 24.8,
-  pointRadius: 6.8,
+  pointRadius: 8.5,
   flashRadiusBoost: 1.4
 };
 const DEFAULT_PANEL_LAYOUT = {
@@ -386,15 +415,16 @@ const DEFAULT_WIDGET_LAYOUT = {
 };
 const DEFAULT_CENTER_LAYOUT = {
   roundTitleY: 18,
-  roundTitleOffsetY: -16,
+  roundTitleOffsetY: -8,
   roundTitleFontSize: 11,
   sectionLabelY: 23,
-  sectionLabelOffsetY: -16,
+  sectionLabelOffsetY: -8,
   sectionLabelSize: 10,
   winRowYRatio: 0.66,
-  scoreRowOffsetY: 13,
+  scoreRowOffsetY: 9,
   aiColumnXRatio: 0.14,
   playerColumnXRatio: 0.86,
+  winGroupSideInset: 28,
   vsSize: 15,
   winSlotSize: 17,
   winSlotGap: 8,
@@ -438,6 +468,7 @@ let pileModalScrollArea = null;
 let pileModalDrag = null;
 let shopCardHitAreas = [];
 let shopBuyButtonHitAreas = [];
+let rewardCardButtonHitAreas = [];
 let routeNodeHitAreas = [];
 let modal = null;
 let modalStack = [];
@@ -454,6 +485,7 @@ let roundLabelPulseAt = 0;
 let hpRecoverPulse = { player: null, ai: null };
 let matchVictoryRewardAt = 0;
 let routeMapEnteredAt = 0;
+let bossBombRewardFlight = null;
 let cardsCatalogEntries = null;
 let catalogById = {};
 let catalogDisplayNameToId = {};
@@ -785,12 +817,17 @@ function attachCatalogMetadataToCard(card, meta) {
   }
 }
 
-/** 与 export_cards 一致：row.card 未带 effect 时按 effectName 补引擎键。 */
-function ensureEngineEffectFromCatalogEffectName(card, effectNameRow) {
+/** 与 export_cards 一致：row.card 未带 effect 时优先按 catalog id 补引擎键，旧数据再按 effectName 兜底。 */
+function ensureEngineEffectFromCatalog(card, catalogId, effectNameRow) {
   if (!card || card.type !== CARD_SCORE) {
     return;
   }
   if (card.effect && EFFECTS[card.effect]) {
+    return;
+  }
+  const idEffect = CATALOG_EFFECT_BY_ID[catalogId];
+  if (idEffect && EFFECTS[idEffect]) {
+    card.effect = idEffect;
     return;
   }
   const en = String(effectNameRow || "").trim();
@@ -846,7 +883,7 @@ function applyCardsCatalogPayload(data) {
       effectName: row.effectName,
       effectDescription: row.effectDescription
     });
-    ensureEngineEffectFromCatalogEffectName(card, row.effectName);
+    ensureEngineEffectFromCatalog(card, row.id, row.effectName);
     return {
       id: row.id,
       unlocked: catalogRowUnlocked(row),
@@ -1669,6 +1706,23 @@ function makeSide(id, name, deckCards) {
   };
 }
 
+function getCurrentRunWinTarget() {
+  if (!runState) {
+    return WIN_TARGET;
+  }
+
+  const roundIndex = clamp(runState.bossesDefeated || 0, 0, RUN_WIN_TARGETS_BY_BOSS_ROUND.length - 1);
+  return RUN_WIN_TARGETS_BY_BOSS_ROUND[roundIndex] || WIN_TARGET;
+}
+
+function getMatchWinTarget() {
+  if (game && typeof game.winTarget === "number" && game.winTarget > 0) {
+    return game.winTarget;
+  }
+
+  return getCurrentRunWinTarget();
+}
+
 function startGame() {
   runState = makeRunState();
   seedAutoVisitedRouteCells();
@@ -1743,7 +1797,6 @@ function startNextRunBattle() {
   ensureRunState();
   const routeNode = getCurrentRouteNode();
   if (routeNode) {
-    injectBossPreBattleBomb(routeNode);
     const routeCfg = getRunBattleConfig(routeNode);
     let aiDeck = getExpeditionAiDeckForRouteNode(routeNode);
     if (!aiDeck || aiDeck.length === 0) {
@@ -1763,7 +1816,6 @@ function startNextRunBattle() {
   if (fightNum > RUN_BATTLE_COUNT) {
     return;
   }
-  injectBossPreBattleBomb(fightNum);
   const cfg = getRunBattleConfig(fightNum);
   startBattle(cfg.name, cfg.deck);
 }
@@ -1790,6 +1842,7 @@ function startBattle(opponentName, aiDeckOverride, opponentLinesExplicit) {
     active: "player",
     firstSideId: "player",
     round: 0,
+    winTarget: getCurrentRunWinTarget(),
     message: "",
     winner: null,
     matchWinner: null,
@@ -2685,11 +2738,6 @@ function applyInciteEffect(user) {
     return false;
   }
 
-  if (opp.stopped) {
-    user.status = "勾引：对手已停牌";
-    return false;
-  }
-
   if (isQueueFull(opp)) {
     user.status = "勾引：对手队列已满";
     return false;
@@ -2735,7 +2783,7 @@ function chooseAiUseFloodNow() {
 
 function chooseAiUseInciteNow() {
   const opp = game.player;
-  if (!opp || opp.busted || opp.stopped || isQueueFull(opp)) {
+  if (!opp || opp.busted || isQueueFull(opp)) {
     return false;
   }
 
@@ -3157,7 +3205,7 @@ function triggerTestWin() {
     return;
   }
 
-  game.player.wins = WIN_TARGET - 1;
+  game.player.wins = getMatchWinTarget() - 1;
   finishRound("player", "测试：玩家直接赢得整场对战。");
 }
 
@@ -3185,8 +3233,9 @@ function finishRound(winnerId, message) {
     winScoreSlotPulse = null;
   }
 
-  if (game.player.wins >= WIN_TARGET || game.ai.wins >= WIN_TARGET) {
-    game.matchWinner = game.player.wins >= WIN_TARGET ? "player" : "ai";
+  const winTarget = getMatchWinTarget();
+  if (game.player.wins >= winTarget || game.ai.wins >= winTarget) {
+    game.matchWinner = game.player.wins >= winTarget ? "player" : "ai";
     const aiBust = game.matchWinner === "player" && game.ai.busted;
     const finalTip = game.matchWinner === "player" ? (aiBust ? "对手爆掉了！" : "你赢得了整场对战！") : "对手赢得了整场对战！";
     game.message = finalTip;
@@ -3306,17 +3355,70 @@ function advanceFromRoundEnd() {
   startRound();
 }
 
-function computeVictoryRewardBreakdown(goldBefore) {
-  const safeGold = Math.max(0, goldBefore | 0);
-  const baseGold = VICTORY_BASE_GOLD;
-  const interestGold = Math.min(VICTORY_INTEREST_CAP, Math.floor(safeGold / GOLD_PER_INTEREST_UNIT));
+function getVictoryRewardNodeType() {
+  const node = getCurrentRouteNode();
+  if (node && (node.type === ROUTE_NODE_NORMAL || node.type === ROUTE_NODE_ELITE || node.type === ROUTE_NODE_BOSS)) {
+    return node.type;
+  }
+  return ROUTE_NODE_NORMAL;
+}
 
-  return {
-    goldBefore: safeGold,
-    baseGold: baseGold,
-    interestGold: interestGold,
-    totalGold: baseGold + interestGold
+function getVictoryRewardGoldForNodeType(nodeType) {
+  return VICTORY_REWARD_GOLD_BY_NODE_TYPE[nodeType] || VICTORY_REWARD_GOLD_BY_NODE_TYPE[ROUTE_NODE_NORMAL];
+}
+
+function getRewardTierForCatalogEntry(entry) {
+  const price = entry && typeof entry.shopPrice === "number" && !isNaN(entry.shopPrice) ? entry.shopPrice : SHOP_CARD_COST;
+  if (price <= 4) {
+    return "low";
+  }
+  if (price <= 6) {
+    return "mid";
+  }
+  return "high";
+}
+
+function getRewardTierPattern(nodeType) {
+  if (nodeType === ROUTE_NODE_ELITE) {
+    return ["mid", "mid", "high"];
+  }
+  if (nodeType === ROUTE_NODE_BOSS) {
+    return ["high", "high", "mid"];
+  }
+  return ["low", "low", "mid"];
+}
+
+function takeRewardEntryFromPools(tier, tierPools, fallbackPool, usedIds) {
+  const tierFallbacks = {
+    low: ["low", "mid", "high"],
+    mid: ["mid", "high", "low"],
+    high: ["high", "mid", "low"]
   };
+  const tiers = tierFallbacks[tier] || ["mid", "low", "high"];
+  let i;
+  let j;
+  let pool;
+  let entry;
+  for (i = 0; i < tiers.length; i += 1) {
+    pool = tierPools[tiers[i]] || [];
+    for (j = 0; j < pool.length; j += 1) {
+      entry = pool[j];
+      if (entry && usedIds.indexOf(entry.id) < 0) {
+        usedIds.push(entry.id);
+        return entry;
+      }
+    }
+  }
+
+  for (i = 0; i < fallbackPool.length; i += 1) {
+    entry = fallbackPool[i];
+    if (entry && usedIds.indexOf(entry.id) < 0) {
+      usedIds.push(entry.id);
+      return entry;
+    }
+  }
+
+  return fallbackPool.length ? fallbackPool[0] : null;
 }
 
 function openVictoryRewardModal() {
@@ -3330,22 +3432,68 @@ function openVictoryRewardModal() {
   modalStack = [];
   buttons = {};
 
-  const goldBefore = runState.gold;
-  const breakdown = computeVictoryRewardBreakdown(goldBefore);
-  modal = Object.assign({ type: "victoryReward" }, breakdown);
+  const nodeType = getVictoryRewardNodeType();
+  modal = {
+    type: "victoryRewards",
+    nodeType: nodeType,
+    goldReward: getVictoryRewardGoldForNodeType(nodeType),
+    cardChoices: generateCardChoices(VICTORY_REWARD_CARD_COUNT, nodeType),
+    claimedGold: false,
+    claimedCard: false,
+    cardPickOpen: false,
+    pendingContinueConfirm: false
+  };
 }
 
-function confirmVictoryRewards() {
+function claimVictoryGoldReward() {
   ensureRunState();
-  if (!modal || modal.type !== "victoryReward") {
+  if (!modal || modal.type !== "victoryRewards" || modal.claimedGold) {
+    return;
+  }
+
+  const amount = Math.max(0, modal.goldReward | 0);
+  runState.gold += amount;
+  modal.claimedGold = true;
+  showTip("获得 " + amount + " 金币", 2200);
+}
+
+function chooseVictoryCardReward(index) {
+  ensureRunState();
+  if (!modal || modal.type !== "victoryRewards" || modal.claimedCard) {
+    return;
+  }
+
+  const choice = modal.cardChoices && modal.cardChoices[index];
+  if (!choice) {
+    return;
+  }
+
+  const card = cloneCard(choice);
+  runState.deck.push(card);
+  modal.claimedCard = true;
+  modal.cardPickOpen = false;
+  showTip("获得卡牌：" + getCardName(card), 2200);
+}
+
+function skipVictoryCardReward() {
+  ensureRunState();
+  if (!modal || modal.type !== "victoryRewards" || modal.claimedCard) {
+    return;
+  }
+
+  runState.gold += VICTORY_REWARD_SKIP_CARD_GOLD;
+  modal.claimedCard = true;
+  modal.cardPickOpen = false;
+  showTip("跳过卡牌，获得 " + VICTORY_REWARD_SKIP_CARD_GOLD + " 金币", 2200);
+}
+
+function continueVictoryRewards() {
+  ensureRunState();
+  if (!modal || modal.type !== "victoryRewards") {
     return;
   }
 
   runState.battlesWon += 1;
-  runState.gold += modal.totalGold;
-  modal = null;
-  modalStack = [];
-  buttons = {};
 
   const currentNodeAfterWin = getCurrentRouteNode();
   const beatBossSegment =
@@ -3355,26 +3503,119 @@ function confirmVictoryRewards() {
     isRouteComplete();
 
   if (beatBossSegment) {
-    runState.bossesDefeated += 1;
-    if (runState.bossesDefeated >= RUN_BOSS_ROUNDS) {
-      enterRunVictory();
-      return;
-    }
-
-    runState.routeRows = makeRouteRows(runState.bossesDefeated);
-    seedAutoVisitedRouteCells();
-    enterRouteMap();
+    openBossBombRewardModal();
     return;
   }
 
+  modal = null;
+  modalStack = [];
+  buttons = {};
   enterRouteMap();
 }
 
-function generateCardChoices(count) {
-  const entries = shuffle(getRewardCatalogEntries().slice());
+function openBossBombRewardModal() {
+  bossBombRewardFlight = null;
+  modalStack = [];
+  buttons = {};
+  modal = {
+    type: "bossBombReward",
+    card: cloneFirstBombCardFromCatalog(),
+    phase: "prompt",
+    openedAt: Date.now()
+  };
+}
+
+function beginBossBombRewardFlight() {
+  if (!modal || modal.type !== "bossBombReward" || modal.phase === "flying") {
+    return;
+  }
+
+  const width = canvas.width || 1;
+  const height = canvas.height || 1;
+  const bottomBar = getRunBottomBarRect(width, height);
+  const target = buttons.runDeck
+    ? { x: buttons.runDeck.x + buttons.runDeck.w / 2, y: buttons.runDeck.y + buttons.runDeck.h / 2 }
+    : { x: bottomBar.x + bottomBar.w - 50, y: bottomBar.y + bottomBar.h / 2 };
+  const source = modal.cardRect
+    ? { x: modal.cardRect.x + modal.cardRect.w / 2, y: modal.cardRect.y + modal.cardRect.h / 2 }
+    : { x: width / 2, y: height / 2 };
+
+  modal.phase = "flying";
+  modal.startedAt = Date.now();
+  bossBombRewardFlight = {
+    card: modal.card,
+    source: source,
+    target: target,
+    startedAt: modal.startedAt,
+    duration: 680
+  };
+}
+
+function completeBossBombReward() {
+  ensureRunState();
+  const card = modal && modal.type === "bossBombReward" && modal.card ? modal.card : cloneFirstBombCardFromCatalog();
+  runState.deck.push(card);
+  showTip("新的炸弹已加入你的牌组", 2200);
+  bossBombRewardFlight = null;
+  modal = null;
+  modalStack = [];
+  buttons = {};
+
+  runState.bossesDefeated += 1;
+  if (runState.bossesDefeated >= RUN_BOSS_ROUNDS) {
+    enterRunVictory();
+    return;
+  }
+
+  runState.routeRows = makeRouteRows(runState.bossesDefeated);
+  seedAutoVisitedRouteCells();
+  enterRouteMap();
+}
+
+function requestContinueVictoryRewards() {
+  if (!modal || modal.type !== "victoryRewards") {
+    return;
+  }
+
+  if (modal.claimedGold && modal.claimedCard) {
+    continueVictoryRewards();
+    return;
+  }
+
+  modal.pendingContinueConfirm = true;
+  modal.cardPickOpen = false;
+}
+
+function generateCardChoices(count, nodeType) {
+  const entries = shuffle(getShopCatalogEntries().slice());
+  const fallbackEntries = entries.length ? entries : shuffle(getRewardCatalogEntries().slice());
+  if (fallbackEntries.length === 0) {
+    return [];
+  }
+
+  const tierPools = { low: [], mid: [], high: [] };
+  fallbackEntries.forEach(function (entry) {
+    const tier = getRewardTierForCatalogEntry(entry);
+    tierPools[tier].push(entry);
+  });
+
+  tierPools.low = shuffle(tierPools.low);
+  tierPools.mid = shuffle(tierPools.mid);
+  tierPools.high = shuffle(tierPools.high);
+  const pattern = getRewardTierPattern(nodeType);
+  const usedIds = [];
   const choices = [];
   for (let i = 0; i < count; i += 1) {
-    choices.push(cloneCard(entries[i % entries.length].card));
+    const entry = takeRewardEntryFromPools(pattern[i % pattern.length], tierPools, fallbackEntries, usedIds);
+    if (!entry || !entry.card) {
+      continue;
+    }
+    const card = cloneCard(entry.card);
+    const cid = Number(entry.id);
+    if (!isNaN(cid)) {
+      card.catalogId = cid;
+    }
+    choices.push(card);
   }
   return choices;
 }
@@ -3807,13 +4048,67 @@ function handleTouch(event) {
       return;
     }
 
-    if (modal.type === "victoryReward") {
-      if (hitButton(point, buttons.interestHelp)) {
-        showTip(INTEREST_RULE_TEXT, 3200);
+    if (modal.type === "bossBombReward") {
+      if (modal.phase !== "flying") {
+        if (handleRunBottomBarTouch(point)) {
+          return;
+        }
+        if (hitButton(point, buttons.bossBombConfirm)) {
+          beginBossBombRewardFlight();
+        }
+      }
+      return;
+    }
+
+    if (modal.type === "victoryRewards") {
+      if (!modal.pendingContinueConfirm && handleRunBottomBarTouch(point)) {
+        return;
+      }
+
+      if (modal.cardPickOpen) {
+        const rewardButtonHit = rewardCardButtonHitAreas.find(function (area) {
+          return hitButton(point, area);
+        });
+        if (rewardButtonHit) {
+          chooseVictoryCardReward(rewardButtonHit.index);
+          return;
+        }
+
+        const rewardCardHit = modalCardHitAreas.find(function (area) {
+          return hitButton(point, area);
+        });
+        if (rewardCardHit) {
+          openCardTipModal(rewardCardHit.card);
+        }
+        if (hitButton(point, buttons.skipCardReward)) {
+          skipVictoryCardReward();
+        }
+        return;
+      }
+
+      if (modal.pendingContinueConfirm) {
+        if (hitButton(point, buttons.rewardConfirmBack)) {
+          modal.pendingContinueConfirm = false;
+          return;
+        }
+        if (hitButton(point, buttons.rewardConfirmSkip)) {
+          continueVictoryRewards();
+        }
+        return;
+      }
+
+      if (hitButton(point, buttons.rewardGold)) {
+        claimVictoryGoldReward();
+        return;
+      }
+      if (hitButton(point, buttons.rewardCard)) {
+        if (!modal.claimedCard) {
+          modal.cardPickOpen = true;
+        }
         return;
       }
       if (hitButton(point, buttons.continueReward)) {
-        confirmVictoryRewards();
+        requestContinueVictoryRewards();
       }
       return;
     }
@@ -4076,6 +4371,13 @@ function update(frameNow) {
   updateTips(now);
 
   if (scene === "playing" && tickBruiserDrawMachine(now)) {
+    return;
+  }
+
+  if (modal && modal.type === "bossBombReward" && modal.phase === "flying" && bossBombRewardFlight) {
+    if (now - bossBombRewardFlight.startedAt >= bossBombRewardFlight.duration) {
+      completeBossBombReward();
+    }
     return;
   }
 
@@ -4356,7 +4658,244 @@ function drawTitleStartButton(rect, enabled) {
   ctx.restore();
 }
 
-function drawVictoryRewardModal(width, height) {
+function drawVictoryRewardsModal(width, height) {
+  buttons = {};
+
+  ctx.fillStyle = "rgba(6, 10, 20, 0.52)";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(2, 4, 12, 0.32)";
+  ctx.fillRect(0, 0, width, height);
+
+  if (modal.cardPickOpen) {
+    drawVictoryCardPickModal(width, height);
+    return;
+  }
+
+  if (modal.pendingContinueConfirm) {
+    drawVictoryRewardConfirmModal(width, height);
+    return;
+  }
+
+  drawRunBottomBar(width, height);
+
+  const panelW = clamp(Math.min(334, width - 36), 260, width - 24);
+  const panelPadTop = 26;
+  const panelPadX = 20;
+  const titleH = 32;
+  const gapAfterTitle = 18;
+  const itemH = 50;
+  const itemGap = 12;
+  const gapBeforeButton = 18;
+  const buttonH = 42;
+  const panelPadBottom = 18;
+  const panelH = panelPadTop + titleH + gapAfterTitle + itemH * 2 + itemGap + gapBeforeButton + buttonH + panelPadBottom;
+  const panel = {
+    x: (width - panelW) / 2,
+    y: Math.max(42, (height - panelH) / 2),
+    w: panelW,
+    h: panelH
+  };
+
+  drawVictoryRewardPanel(panel);
+  drawCenteredText("奖励列表", panel.x + panel.w / 2, panel.y + panelPadTop + 24, 22, THEME.text, "bold");
+
+  const itemX = panel.x + panelPadX;
+  const itemW = panel.w - panelPadX * 2;
+  const itemY = panel.y + panelPadTop + titleH + gapAfterTitle;
+  buttons.rewardGold = { x: itemX, y: itemY, w: itemW, h: itemH };
+  buttons.rewardCard = { x: itemX, y: itemY + itemH + itemGap, w: itemW, h: itemH };
+  drawVictoryRewardListItem(buttons.rewardGold, "金币x" + Math.max(0, modal.goldReward | 0), modal.claimedGold);
+  drawVictoryRewardListItem(buttons.rewardCard, "获得卡牌", modal.claimedCard);
+
+  buttons.continueReward = {
+    x: itemX,
+    y: buttons.rewardCard.y + itemH + gapBeforeButton,
+    w: itemW,
+    h: buttonH
+  };
+  drawButton(buttons.continueReward, "继续", THEME.buttonStop, "#061d1b", true);
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+}
+
+function drawVictoryRewardPanel(panel) {
+  ctx.save();
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
+  ctx.shadowOffsetY = 0;
+  ctx.fillStyle = "rgba(22, 28, 46, 0.88)";
+  ctx.strokeStyle = "rgba(160, 220, 255, 0.24)";
+  ctx.lineWidth = 1;
+  roundRect(panel.x, panel.y, panel.w, panel.h, 14, true, true);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+  roundRect(panel.x + 1, panel.y + 1, panel.w - 2, panel.h - 2, 13, false, true);
+  ctx.restore();
+}
+
+function drawVictoryRewardListItem(rect, title, claimed) {
+  const fill = claimed ? "rgba(38, 43, 59, 0.68)" : "rgba(14, 24, 42, 0.86)";
+  const edge = claimed ? "rgba(143, 155, 181, 0.22)" : "rgba(94, 231, 255, 0.42)";
+  ctx.fillStyle = fill;
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 1;
+  roundRect(rect.x, rect.y, rect.w, rect.h, 9, true, true);
+
+  ctx.textAlign = "left";
+  drawText(title, rect.x + 16, rect.y + rect.h / 2 + 6, 18, claimed ? THEME.muted : THEME.text, "bold");
+  if (claimed) {
+    drawText("已领取", rect.x + rect.w - 66, rect.y + rect.h / 2 + 5, 12, THEME.muted, "bold");
+  }
+}
+
+function drawVictoryCardPickModal(width, height) {
+  drawRunBottomBar(width, height);
+
+  const panelW = clamp(Math.min(356, width - 28), 278, width - 20);
+  const panelH = 374;
+  const panel = {
+    x: (width - panelW) / 2,
+    y: Math.max(38, (height - panelH) / 2),
+    w: panelW,
+    h: panelH
+  };
+  drawVictoryRewardPanel(panel);
+  drawCenteredText("获得卡牌", panel.x + panel.w / 2, panel.y + 36, 22, THEME.text, "bold");
+  drawCenteredText("选择 1 张加入牌库", panel.x + panel.w / 2, panel.y + 60, 12, THEME.muted, "normal");
+  buttons.skipCardReward = { x: panel.x + 20, y: panel.y + panel.h - 58, w: panel.w - 40, h: 42 };
+  drawVictoryRewardCardChoices(
+    modal.cardChoices || [],
+    panel.x + 16,
+    panel.y + 88,
+    panel.w - 32,
+    buttons.skipCardReward.y - panel.y - 102,
+    width,
+    height
+  );
+  drawButton(buttons.skipCardReward, "跳过 +2金币", THEME.buttonStop, "#061d1b", true);
+}
+
+function getVictoryRewardCardDisplaySize(viewportWidth, viewportHeight) {
+  const queueCardSize = getQueueCardDisplaySize(viewportWidth, viewportHeight);
+  return Math.min(82, Math.max(54, Math.min(queueCardSize.w, queueCardSize.h) * 1.35));
+}
+
+function drawVictoryRewardCardChoices(cards, x, y, width, height, viewportWidth, viewportHeight) {
+  rewardCardButtonHitAreas = [];
+  const count = Math.max(1, Math.min(3, cards.length || 1));
+  const gap = CARD_GRID_GAP + 18;
+  const btnH = Math.min(34, getWidgetLayout().controlHeight);
+  const btnGap = 12;
+  const maxCardSize = getVictoryRewardCardDisplaySize(viewportWidth, viewportHeight);
+  const maxByWidth = (width - gap * (count - 1)) / count;
+  const maxByHeight = Math.max(24, height - btnH - btnGap);
+  const cardS = Math.max(42, Math.min(maxCardSize, maxByWidth, maxByHeight));
+  const totalW = count * cardS + gap * (count - 1);
+  const startX = x + (width - totalW) / 2;
+  const startY = y + Math.max(0, (height - cardS - btnGap - btnH) / 2);
+
+  cards.forEach(function (card, index) {
+    const cardX = startX + index * (cardS + gap);
+    const cardY = startY;
+    const btn = { x: cardX - 4, y: cardY + cardS + btnGap, w: cardS + 8, h: btnH };
+    modalCardHitAreas.push({ x: cardX, y: cardY, w: cardS, h: cardS, card: card, index: index });
+    rewardCardButtonHitAreas.push(Object.assign({ index: index }, btn));
+    drawMiniCard(card, cardX, cardY, cardS, cardS);
+    drawButton(btn, "选择", THEME.button, "#120613", true);
+  });
+}
+
+function drawVictoryRewardConfirmModal(width, height) {
+  const panelW = clamp(Math.min(316, width - 44), 252, width - 28);
+  const panelH = 190;
+  const panel = {
+    x: (width - panelW) / 2,
+    y: Math.max(58, (height - panelH) / 2),
+    w: panelW,
+    h: panelH
+  };
+  drawVictoryRewardPanel(panel);
+  drawCenteredText("还有奖励未领取", panel.x + panel.w / 2, panel.y + 42, 20, THEME.text, "bold");
+  drawCenteredText("确定放弃剩余奖励并继续吗？", panel.x + panel.w / 2, panel.y + 76, 13, THEME.muted, "normal");
+
+  const gap = 10;
+  const btnH = 42;
+  const btnW = (panel.w - 40 - gap) / 2;
+  const y = panel.y + panel.h - 58;
+  buttons.rewardConfirmBack = { x: panel.x + 20, y: y, w: btnW, h: btnH };
+  buttons.rewardConfirmSkip = { x: panel.x + 20 + btnW + gap, y: y, w: btnW, h: btnH };
+  drawButton(buttons.rewardConfirmBack, "返回领取", THEME.button, "#120613", true);
+  drawButton(buttons.rewardConfirmSkip, "放弃继续", THEME.buttonStop, "#061d1b", true);
+}
+
+function drawBossBombRewardModal(width, height) {
+  buttons = {};
+
+  ctx.fillStyle = "rgba(6, 10, 20, 0.54)";
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = "rgba(2, 4, 12, 0.34)";
+  ctx.fillRect(0, 0, width, height);
+
+  drawRunBottomBar(width, height);
+
+  if (modal.phase === "flying") {
+    drawBossBombRewardFlight();
+    return;
+  }
+
+  const panelW = clamp(Math.min(330, width - 36), 260, width - 24);
+  const panelH = 292;
+  const panel = {
+    x: (width - panelW) / 2,
+    y: Math.max(38, (height - panelH) / 2),
+    w: panelW,
+    h: panelH
+  };
+  drawVictoryRewardPanel(panel);
+  drawCenteredText("新的炸弹", panel.x + panel.w / 2, panel.y + 38, 22, THEME.text, "bold");
+  drawCenteredText("一张新的炸弹将加入你的卡组", panel.x + panel.w / 2, panel.y + 66, 13, THEME.muted, "normal");
+
+  const cardSize = getVictoryRewardCardDisplaySize(width, height);
+  const cardRect = {
+    x: panel.x + (panel.w - cardSize) / 2,
+    y: panel.y + 92,
+    w: cardSize,
+    h: cardSize
+  };
+  modal.cardRect = cardRect;
+  drawMiniCard(modal.card, cardRect.x, cardRect.y, cardRect.w, cardRect.h);
+
+  buttons.bossBombConfirm = {
+    x: panel.x + 20,
+    y: panel.y + panel.h - 58,
+    w: panel.w - 40,
+    h: 42
+  };
+  drawButton(buttons.bossBombConfirm, "确定", THEME.buttonStop, "#061d1b", true);
+}
+
+function drawBossBombRewardFlight() {
+  if (!bossBombRewardFlight) {
+    return;
+  }
+
+  const elapsed = Date.now() - bossBombRewardFlight.startedAt;
+  const t = clamp(elapsed / bossBombRewardFlight.duration, 0, 1);
+  const eased = 1 - Math.pow(1 - t, 3);
+  const cx = lerp(bossBombRewardFlight.source.x, bossBombRewardFlight.target.x, eased);
+  const cy =
+    lerp(bossBombRewardFlight.source.y, bossBombRewardFlight.target.y, eased) - Math.sin(t * Math.PI) * 48;
+  const startSize = getVictoryRewardCardDisplaySize(canvas.width || 1, canvas.height || 1);
+  const size = lerp(startSize, 34, eased);
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((1 - eased) * -0.18 + Math.sin(t * Math.PI) * 0.12);
+  drawMiniCard(bossBombRewardFlight.card, -size / 2, -size / 2, size, size);
+  ctx.restore();
+}
+
+function drawVictoryRewardModalOld(width, height) {
   buttons = {};
 
   ctx.fillStyle = "rgba(6, 10, 20, 0.48)";
@@ -4549,7 +5088,7 @@ function drawRunVictory(width, height) {
   drawBackground(width, height);
   drawCenteredText("远征胜利", width / 2, height * 0.3, 30, THEME.gold, "bold");
   drawCenteredText("你已击败全部 " + RUN_BOSS_ROUNDS + " 名庄家", width / 2, height * 0.4, 17, THEME.text, "normal");
-  drawCenteredText("每轮终点庄家战前会永久塞入 1 张炸弹", width / 2, height * 0.47, 12, THEME.muted, "normal");
+  drawCenteredText("每次击败庄家后会永久加入 1 张炸弹", width / 2, height * 0.47, 12, THEME.muted, "normal");
   buttons.runVictoryOk = { x: width * 0.2, y: height * 0.68, w: width * 0.6, h: 50 };
   drawButton(buttons.runVictoryOk, "返回标题", THEME.buttonStop, "#061d1b", true);
 }
@@ -5170,15 +5709,31 @@ function getGameLayout(width, height) {
   const sideMargin = panelLayout.sideMargin;
   const controlsY = getGameplayAreaBottom(width, height, frame);
   const centerH = Math.max(panelLayout.minCenterH, frame.h * panelLayout.centerHRatio);
-  const panelH = (controlsY - frame.y - margin - centerH - gap * 2) / 2;
+  const availableTop = frame.y + margin;
+  const availableH = Math.max(0, controlsY - availableTop);
+  const maxPanelH = Math.max(0, (availableH - centerH - gap * 2) / 2);
+  const naturalPanelH = getNaturalBattlePanelHeight(frame.w - sideMargin * 2);
+  const panelH = Math.min(maxPanelH, naturalPanelH);
+  const stackH = panelH * 2 + centerH + gap * 2;
+  const stackY = availableTop + Math.max(0, (availableH - stackH) / 2);
 
   return {
     frame: frame,
     gap: gap,
     sideMargin: sideMargin,
-    aiPanel: { x: frame.x + sideMargin, y: frame.y + margin, w: frame.w - sideMargin * 2, h: panelH },
-    playerPanel: { x: frame.x + sideMargin, y: frame.y + margin + panelH + gap + centerH + gap, w: frame.w - sideMargin * 2, h: panelH }
+    aiPanel: { x: frame.x + sideMargin, y: stackY, w: frame.w - sideMargin * 2, h: panelH },
+    playerPanel: { x: frame.x + sideMargin, y: stackY + panelH + gap + centerH + gap, w: frame.w - sideMargin * 2, h: panelH }
   };
+}
+
+function getNaturalBattlePanelHeight(panelW) {
+  const cardAreaW = Math.max(0, panelW - 24);
+  const queueW = Math.max(0, cardAreaW - 20);
+  const cappedW = Math.min(queueW, 330);
+  const gridW = Math.max(0, cappedW - CARD_GRID_GAP * (QUEUE_COLUMNS - 1));
+  const cardS = gridW / QUEUE_COLUMNS;
+  const gridH = QUEUE_ROWS * cardS + CARD_GRID_GAP * (QUEUE_ROWS - 1);
+  return 86 + gridH + 24;
 }
 
 function getBattleLayoutFrame(width, height) {
@@ -5891,16 +6446,18 @@ function drawCenterStatus(rect) {
   drawPanelRim(rect, THEME.gold);
   const centerX = rect.x + rect.w / 2;
   const centerLineY = rect.y + rect.h / 2;
-  const titleY = clamp(centerLineY + centerUi.roundTitleOffsetY, rect.y + 12, rect.y + rect.h - 28);
-  const slotY = clamp(centerLineY + centerUi.scoreRowOffsetY, rect.y + 30, rect.y + rect.h - 14);
-  const labelY = clamp(centerLineY + centerUi.sectionLabelOffsetY, rect.y + 12, rect.y + rect.h - 28);
-  const aiX = rect.x + rect.w * centerUi.aiColumnXRatio;
-  const playerX = rect.x + rect.w * centerUi.playerColumnXRatio;
+  const titleY = clamp(centerLineY + centerUi.roundTitleOffsetY, rect.y + 12, rect.y + rect.h - 20);
+  const slotY = clamp(centerLineY + centerUi.scoreRowOffsetY, rect.y + 24, rect.y + rect.h - 14);
+  const labelY = clamp(centerLineY + centerUi.sectionLabelOffsetY, rect.y + 12, rect.y + rect.h - 20);
+  const aiWinGroup = getWinSlotGroupLayout(rect, "ai");
+  const playerWinGroup = getWinSlotGroupLayout(rect, "player");
+  const aiX = aiWinGroup.centerX;
+  const playerX = playerWinGroup.centerX;
 
   drawCenterRoundTitle(centerX, titleY);
 
   drawCenteredText("对手通关", aiX, labelY, centerUi.sectionLabelSize, THEME.muted, "bold");
-  drawWinSlots(aiX, slotY, game.ai.wins, THEME.panelEdge, "ai");
+  drawWinSlotsAtStart(aiWinGroup.startX, slotY, game.ai.wins, THEME.panelEdge, "ai");
 
   const widgetLayout = getWidgetLayout();
   const chipGap = 6;
@@ -5928,19 +6485,35 @@ function drawCenterStatus(rect) {
   drawMiddleText("VS", centerX, slotY, centerUi.vsSize, THEME.gold, "bold");
 
   drawCenteredText("我的通关", playerX, labelY, centerUi.sectionLabelSize, THEME.muted, "bold");
-  drawWinSlots(playerX, slotY, game.player.wins, THEME.green, "player");
+  drawWinSlotsAtStart(playerWinGroup.startX, slotY, game.player.wins, THEME.green, "player");
 }
 
-function drawWinSlots(centerX, centerY, wins, fillColor, sideKey) {
+function getWinSlotGroupLayout(rect, sideKey) {
+  const centerUi = getCenterLayout();
+  const size = centerUi.winSlotSize;
+  const gap = centerUi.winSlotGap;
+  const winTarget = getMatchWinTarget();
+  const groupW = size * winTarget + gap * (winTarget - 1);
+  const inset = Math.max(12, centerUi.winGroupSideInset || 0);
+  const startX = sideKey === "player" ? rect.x + rect.w - inset - groupW : rect.x + inset;
+
+  return {
+    startX: startX,
+    centerX: startX + groupW / 2,
+    width: groupW
+  };
+}
+
+function drawWinSlotsAtStart(startX, centerY, wins, fillColor, sideKey) {
   const now = Date.now();
   const WIN_SLOT_PULSE_MS = 760;
   const centerUi = getCenterLayout();
   const border = getBattleBorderOptions({ lineWidth: 1.5, cornerRadius: 4, glowBrightness: 1 });
   const size = centerUi.winSlotSize;
   const gap = centerUi.winSlotGap;
-  const startX = centerX - (size * WIN_TARGET + gap * (WIN_TARGET - 1)) / 2;
+  const winTarget = getMatchWinTarget();
 
-  for (let i = 0; i < WIN_TARGET; i += 1) {
+  for (let i = 0; i < winTarget; i += 1) {
     const x = startX + i * (size + gap);
     const filled = i < wins;
 
@@ -6143,6 +6716,7 @@ function drawPileModal(width, height) {
   }
 
   modalCardHitAreas = [];
+  rewardCardButtonHitAreas = [];
 
   if (modal.type === "activeEffect") {
     drawActiveEffectModal(width, height);
@@ -6174,8 +6748,13 @@ function drawPileModal(width, height) {
     return;
   }
 
-  if (modal.type === "victoryReward") {
-    drawVictoryRewardModal(width, height);
+  if (modal.type === "bossBombReward") {
+    drawBossBombRewardModal(width, height);
+    return;
+  }
+
+  if (modal.type === "victoryRewards") {
+    drawVictoryRewardsModal(width, height);
     return;
   }
 

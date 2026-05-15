@@ -37,16 +37,6 @@
         body {
           background: #111521;
         }
-
-        canvas {
-          width: min(430px, calc(100vw - 32px), calc((100vh - 32px) * 1206 / 2622));
-          width: min(430px, calc(100vw - 32px), calc((100dvh - 32px) * 1206 / 2622));
-          height: auto;
-          max-height: calc(100vh - 32px);
-          max-height: calc(100dvh - 32px);
-          aspect-ratio: 1206 / 2622;
-          box-shadow: 0 18px 56px rgba(0, 0, 0, 0.42);
-        }
       }
 
       .layout-debug-toggle {
@@ -563,10 +553,10 @@
           threshold: {
             labelOffsetX: 0,
             labelOffsetY: 0,
-            pointStartX: 38,
+            pointStartX: 46,
             pointOffsetY: -5,
             pointGap: 24.8,
-            pointRadius: 6.8,
+            pointRadius: 8.5,
             flashRadiusBoost: 1.4
           },
           panels: {
@@ -593,15 +583,16 @@
           },
           center: {
             roundTitleY: 18,
-            roundTitleOffsetY: -16,
+            roundTitleOffsetY: -8,
             roundTitleFontSize: 11,
             sectionLabelY: 23,
-            sectionLabelOffsetY: -16,
+            sectionLabelOffsetY: -8,
             sectionLabelSize: 10,
             winRowYRatio: 0.66,
-            scoreRowOffsetY: 13,
+            scoreRowOffsetY: 9,
             aiColumnXRatio: 0.14,
             playerColumnXRatio: 0.86,
+            winGroupSideInset: 28,
             vsSize: 15,
             winSlotSize: 17,
             winSlotGap: 8,
@@ -625,6 +616,12 @@
               if (saved.pointRadius === 5.8) {
                 saved.pointRadius = defaults.threshold.pointRadius;
               }
+              if (saved.pointStartX === 38) {
+                saved.pointStartX = defaults.threshold.pointStartX;
+              }
+              if (saved.pointRadius === 6.8) {
+                saved.pointRadius = defaults.threshold.pointRadius;
+              }
             } else if (group === "center") {
               if (saved.aiColumnXRatio === 0.1) {
                 saved.aiColumnXRatio = defaults.center.aiColumnXRatio;
@@ -634,6 +631,15 @@
               }
               if (saved.winSlotSize === 16) {
                 saved.winSlotSize = defaults.center.winSlotSize;
+              }
+              if (saved.roundTitleOffsetY === -16) {
+                saved.roundTitleOffsetY = defaults.center.roundTitleOffsetY;
+              }
+              if (saved.sectionLabelOffsetY === -16) {
+                saved.sectionLabelOffsetY = defaults.center.sectionLabelOffsetY;
+              }
+              if (saved.scoreRowOffsetY === 13) {
+                saved.scoreRowOffsetY = defaults.center.scoreRowOffsetY;
               }
             }
             return Object.assign({}, defaults[group], saved);

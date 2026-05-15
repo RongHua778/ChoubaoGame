@@ -2,20 +2,20 @@
   "version": 1,
   "deckId": "round_3_normal_c",
   "name": "第3轮 · 切磋 C",
-  "description": "占位：修改 cardIds 为中文牌名（同 cards.json displayName；炸弹写「炸弹」）。",
+  "description": "占位：修改 cardIds 为数字 catalog id；0 表示炸弹。",
   "cardIds": [
-    "偷窃",
-    "虚张",
-    "一分",
-    "二分",
-    "恐吓",
-    "恐吓",
-    "偷窃",
-    "虚张",
-    "一分",
-    "炸弹",
-    "炸弹",
-    "炸弹"
+    12,
+    13,
+    1,
+    2,
+    14,
+    14,
+    12,
+    13,
+    1,
+    0,
+    0,
+    0
   ],
   "opponentLines": {
     "matchStart": [

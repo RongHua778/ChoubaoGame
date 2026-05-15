@@ -2,20 +2,20 @@
   "version": 1,
   "deckId": "thief",
   "name": "小偷卡组",
-  "description": "远征默认路人对手卡组；cardIds 为中文牌名数组（同 cards.json 的 displayName；炸弹写「炸弹」）；仍兼容数字 id 或 0。",
+  "description": "远征默认路人对手卡组；cardIds 为数字 catalog id 数组；0 表示炸弹；仍兼容旧版中文牌名。",
   "cardIds": [
-    "一分",
-    "二分",
-    "偷窃",
-    "虚张",
-    "一分",
-    "二分",
-    "虚张",
-    "恐吓",
-    "恐吓",
-    "炸弹",
-    "炸弹",
-    "炸弹"
+    1,
+    2,
+    12,
+    13,
+    1,
+    2,
+    13,
+    14,
+    14,
+    0,
+    0,
+    0
   ],
   "opponentLines": {
     "matchStart": [

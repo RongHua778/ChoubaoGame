@@ -271,13 +271,13 @@
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
-      "effectName": "废土",
+      "effectName": "毒爆",
       "effectDescription": "被动：对手队列中每有一张“污染”，则自身+1分",
       "card": {
         "type": "score",
         "value": 1,
         "effect": "wasteland",
-        "displayName": "废土"
+        "displayName": "毒爆"
       }
     },
     {
