@@ -44,6 +44,16 @@ EFFECT_BY_CARD_ID = {
     20: "wasteland",
     21: "poisonSource",
     22: "leakSecrets",
+    23: "swap",
+    24: "support",
+    25: "amplify",
+    26: "legion",
+    27: "strengthen",
+    28: "nimble",
+    29: "frontrunner",
+    30: "hook",
+    31: "defuse",
+    32: "chopsticks",
 }
 
 EFFECT_BY_NAME = {
@@ -67,6 +77,7 @@ EFFECT_BY_NAME = {
     "废土": "wasteland",
     "毒源": "poisonSource",
     "泄密": "leakSecrets",
+    "筷子": "chopsticks",
 }
 
 

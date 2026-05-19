@@ -3,10 +3,11 @@
   "deckId": "round_1_elite_b",
   "name": "红衣女人",
   "description": "第1轮｜强手｜风格：稳健",
+  "aiStyle": "balanced",
   "cardIds": [
     1,
     1,
-    2,
+    1,
     2,
     2,
     19,

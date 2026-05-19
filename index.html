@@ -72,6 +72,125 @@
         cursor: pointer;
       }
 
+      .layout-test-battle-toggle {
+        position: fixed;
+        top: 108px;
+        right: 12px;
+        z-index: 9;
+        width: 38px;
+        height: 38px;
+        padding: 0;
+        color: #071110;
+        background: #73ffb2;
+        border: 0;
+        border-radius: 999px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        font: 700 16px/1 "Noto Sans SC", "Source Han Sans SC", sans-serif;
+        cursor: pointer;
+      }
+
+      .layout-test-battle-panel {
+        position: fixed;
+        top: 108px;
+        right: 58px;
+        z-index: 10;
+        width: 292px;
+        max-height: calc(100vh - 120px);
+        overflow-y: auto;
+        padding: 12px;
+        color: #f4f7ff;
+        background: rgba(12, 16, 28, 0.92);
+        border: 1px solid rgba(115, 255, 178, 0.36);
+        border-radius: 10px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+        font: 12px/1.4 "Noto Sans SC", "Source Han Sans SC", sans-serif;
+        backdrop-filter: blur(10px);
+      }
+
+      .layout-test-battle-panel[hidden],
+      .layout-test-battle-toggle[hidden] {
+        display: none;
+      }
+
+      .layout-test-battle-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .layout-test-battle-title {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .layout-test-battle-close {
+        width: 26px;
+        height: 26px;
+        padding: 0;
+        color: #071110;
+        background: #73ffb2;
+        border: 0;
+        border-radius: 6px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .layout-test-battle-round {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(143, 155, 181, 0.22);
+      }
+
+      .layout-test-battle-round:first-of-type {
+        margin-top: 0;
+      }
+
+      .layout-test-battle-round-title {
+        margin-bottom: 6px;
+        color: rgba(143, 155, 181, 0.88);
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .layout-test-battle-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .layout-test-battle-card {
+        min-width: 0;
+        padding: 7px 8px;
+        color: #f4f7ff;
+        background: rgba(143, 155, 181, 0.12);
+        border: 1px solid rgba(115, 255, 178, 0.2);
+        border-radius: 7px;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .layout-test-battle-card strong {
+        display: block;
+        overflow: hidden;
+        color: #73ffb2;
+        font-size: 12px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .layout-test-battle-card span {
+        display: block;
+        overflow: hidden;
+        margin-top: 2px;
+        color: #8f9bb5;
+        font-size: 11px;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
       .layout-debug {
         position: fixed;
         top: 60px;
@@ -219,6 +338,14 @@
   <body>
     <button class="layout-debug-toggle" type="button" id="layoutDebugToggle" aria-controls="layoutDebugPanel" aria-expanded="false">调</button>
     <button class="layout-test-win-toggle" type="button" id="layoutTestWinToggle" hidden aria-label="测试胜利">胜</button>
+    <button class="layout-test-battle-toggle" type="button" id="layoutTestBattleToggle" hidden aria-controls="layoutTestBattlePanel" aria-expanded="false" aria-label="测试对战">战</button>
+    <div class="layout-test-battle-panel" id="layoutTestBattlePanel" hidden>
+      <div class="layout-test-battle-header">
+        <div class="layout-test-battle-title">测试对战</div>
+        <button class="layout-test-battle-close" type="button" id="layoutTestBattleClose" aria-label="关闭测试对战面板">×</button>
+      </div>
+      <div id="layoutTestBattleList"></div>
+    </div>
     <div class="layout-debug" id="layoutDebugPanel" hidden>
       <div class="layout-debug-header">
         <h2>布局调试</h2>

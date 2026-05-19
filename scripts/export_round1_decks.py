@@ -31,6 +31,36 @@ POSITION_SLOTS: dict[str, tuple[str, ...]] = {
 
 TOKEN_SPLIT_RE = re.compile(r"[，、,；;]+")
 
+AI_STYLE_BY_LABEL = {
+    "保守": "conservative",
+    "胆小": "conservative",
+    "膽小": "conservative",
+    "谨慎": "conservative",
+    "穩健": "balanced",
+    "稳健": "balanced",
+    "灵活": "balanced",
+    "靈活": "balanced",
+    "平衡": "balanced",
+    "普通": "balanced",
+    "激进": "aggressive",
+    "激進": "aggressive",
+    "暴躁": "aggressive",
+    "莽撞": "aggressive",
+}
+
+
+def normalize_ai_style(style: str) -> str:
+    s = _cell_str(style)
+    if not s:
+        return "balanced"
+    lower = s.lower()
+    if lower in ("conservative", "balanced", "aggressive"):
+        return lower
+    for key, value in AI_STYLE_BY_LABEL.items():
+        if key in s:
+            return value
+    return "balanced"
+
 
 def _cell_int(val, default: int = 0) -> int:
     if val is None or (isinstance(val, float) and math.isnan(val)):
@@ -159,12 +189,14 @@ def write_slot_json(stem: str, deck_display_name: str, pos_label: str, style: st
     old_lines = load_existing_opponent_lines(out_path)
     opponent_lines = old_lines or {}
     desc = "第1轮｜{}｜风格：{}".format(pos_label, style if style.strip() else "—").strip()
+    ai_style = normalize_ai_style(style)
 
     payload = {
         "version": 1,
         "deckId": deck_id,
         "name": deck_display_name,
         "description": desc.strip(),
+        "aiStyle": ai_style,
         "cardIds": card_ids,
         "opponentLines": opponent_lines,
     }

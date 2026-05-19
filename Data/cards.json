@@ -48,7 +48,7 @@
       "shopPrice": 5,
       "baseScore": -1,
       "effectName": "陷阱",
-      "effectDescription": "弃置：往对手抽牌堆中放入一枚“临时”炸弹",
+      "effectDescription": "弃置：往对手弃牌堆中放入一枚“临时”炸弹",
       "card": {
         "type": "score",
         "value": -1,
@@ -75,13 +75,13 @@
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 5,
-      "effectName": "莽夫",
+      "effectName": "鲁莽",
       "effectDescription": "被动：被抽取时，会立即再抽2张",
       "card": {
         "type": "score",
         "value": 5,
         "effect": "bruiser",
-        "displayName": "莽夫"
+        "displayName": "鲁莽"
       }
     },
     {
@@ -89,13 +89,13 @@
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 1,
-      "effectName": "先锋",
+      "effectName": "旗帜",
       "effectDescription": "被动：此后抽取的卡获得+1分",
       "card": {
         "type": "score",
         "value": 1,
         "effect": "vanguard",
-        "displayName": "先锋"
+        "displayName": "旗帜"
       }
     },
     {
@@ -115,15 +115,15 @@
     {
       "id": 9,
       "unlocked": true,
-      "shopPrice": 9,
-      "baseScore": 2,
-      "effectName": "圣光",
+      "shopPrice": 6,
+      "baseScore": 0,
+      "effectName": "整理",
       "effectDescription": "主动：使队列中其他卡牌获得+1分",
       "card": {
         "type": "score",
-        "value": 2,
+        "value": 0,
         "effect": "divineLight",
-        "displayName": "圣光"
+        "displayName": "整理"
       }
     },
     {
@@ -145,13 +145,13 @@
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 0,
-      "effectName": "首领",
+      "effectName": "收纳",
       "effectDescription": "被动：队列中每有1个分数低于2的卡牌，则自身+1分",
       "card": {
         "type": "score",
         "value": 0,
         "effect": "chieftain",
-        "displayName": "首领"
+        "displayName": "收纳"
       }
     },
     {
@@ -174,7 +174,7 @@
       "shopPrice": 4,
       "baseScore": 1,
       "effectName": "虚张",
-      "effectDescription": "被动:如果对手的队列数量小于等于3，则自身+2分",
+      "effectDescription": "被动:   如果对手的队列数量小于等于5，则自身+2分",
       "card": {
         "type": "score",
         "value": 1,
@@ -283,20 +283,20 @@
     {
       "id": 21,
       "unlocked": true,
-      "shopPrice": 6,
-      "baseScore": 2,
+      "shopPrice": 5,
+      "baseScore": 0,
       "effectName": "毒源",
       "effectDescription": "被动：在队列中时，对手每再抽一张，就往对手弃牌堆中，加入一张“污染”（具有临时效果，-1分）",
       "card": {
         "type": "score",
-        "value": 2,
+        "value": 0,
         "effect": "poisonSource",
         "displayName": "毒源"
       }
     },
     {
       "id": 22,
-      "unlocked": false,
+      "unlocked": true,
       "shopPrice": 8,
       "baseScore": 0,
       "effectName": "泄密",
@@ -306,6 +306,146 @@
         "value": 0,
         "effect": "leakSecrets",
         "displayName": "泄密"
+      }
+    },
+    {
+      "id": 23,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 1,
+      "effectName": "交换",
+      "effectDescription": "主动：选择队列中另一张牌，与其交换位置",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "swap",
+        "displayName": "换位"
+      }
+    },
+    {
+      "id": 24,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 1,
+      "effectName": "手术",
+      "effectDescription": "被动：相邻下一个位置的牌+3分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "support",
+        "displayName": "手术"
+      }
+    },
+    {
+      "id": 25,
+      "unlocked": true,
+      "shopPrice": 8,
+      "baseScore": 0,
+      "effectName": "心脏",
+      "effectDescription": "被动：该牌获得的所有额外分数翻倍",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "amplify",
+        "displayName": "心脏"
+      }
+    },
+    {
+      "id": 26,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 1,
+      "effectName": "购物",
+      "effectDescription": "被动：如果队列被抽满了，则自身+4分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "legion",
+        "displayName": "购物"
+      }
+    },
+    {
+      "id": 27,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "激素",
+      "effectDescription": "主动：选择队列中另外一张牌，使其+2分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "strengthen",
+        "displayName": "激素"
+      }
+    },
+    {
+      "id": 28,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 2,
+      "effectName": "灵动",
+      "effectDescription": "被动：每当你抽取一张牌时，与队列随机另一张牌交换位置",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "nimble",
+        "displayName": "灵动"
+      }
+    },
+    {
+      "id": 29,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 1,
+      "effectName": "争先",
+      "effectDescription": "被动：如果是队列第一张牌，则自身+4分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "frontrunner",
+        "displayName": "争先"
+      }
+    },
+    {
+      "id": 30,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 0,
+      "effectName": "钓钩",
+      "effectDescription": "主动：选择弃牌堆中的一张牌，将其加入队列",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "hook",
+        "displayName": "钓钩"
+      }
+    },
+    {
+      "id": 31,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 1,
+      "effectName": "拆除",
+      "effectDescription": "主动：抽一张牌，如果是炸弹则将其弃置且不会受到伤害",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "defuse",
+        "displayName": "拆除"
+      }
+    },
+    {
+      "id": 32,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "筷子",
+      "effectDescription": "被动：被抽取时，在队列中加入一张临时的“一分”",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "chopsticks",
+        "displayName": "筷子"
       }
     }
   ]
