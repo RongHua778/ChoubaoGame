@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Read Data/carddesign.xlsx（sheet「全卡表」）写入 Data/cards.json。
+"""Read Data/carddesign.xlsx（sheet「全卡表」/「负面卡表」/「特殊卡表」）写入 Data/cards.json。
 
 列「牌名」或「牌名列」（若都存在则优先前者在 NAME_COLUMNS 中的顺序——当前为先「牌名列」再「牌名」）
 写入各卡的 card.displayName，供卡组表按中文解析；商店是否上架仍由运行时与「是否解锁」列控制。"""
@@ -20,6 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 XLSX_PATH = ROOT / "Data" / "carddesign.xlsx"
 OUTPUT_PATH = ROOT / "Data" / "cards.json"
 SHEET_FULL_TABLE = "全卡表"
+SHEET_NEGATIVE_TABLE = "负面卡表"
+SHEET_SPECIAL_TABLE = "特殊卡表"
 UNLOCK_COLUMN = "是否解锁"
 # 「牌名列」或与数据表一致的「牌名」，用于卡组表按中文名解析与 UI 展示
 NAME_COLUMNS = ("牌名列", "牌名")
@@ -54,6 +56,17 @@ EFFECT_BY_CARD_ID = {
     30: "hook",
     31: "defuse",
     32: "chopsticks",
+    33: "detonate",
+    34: "threaten",
+    35: "calm",
+    36: "bigFish",
+    37: "bait",
+    38: "salvage",
+    39: "rushOrder",
+    40: "badReview",
+    41: "delivery",
+    42: "badCoin",
+    43: "fakeGoods",
 }
 
 EFFECT_BY_NAME = {
@@ -61,12 +74,14 @@ EFFECT_BY_NAME = {
     "虚张": "bluff",
     "恐吓": "intimidate",
     "陷阱": "ambush",
+    "埋伏": "ambush",
     "复制": "copy",
     "莽夫": "bruiser",
     "先锋": "vanguard",
     "小鬼": "imp",
     "圣光": "divineLight",
     "回收": "shield",
+    "回滚": "shield",
     "首领": "chieftain",
     "魅魔": "leech",
     "掀桌": "flood",
@@ -77,7 +92,23 @@ EFFECT_BY_NAME = {
     "废土": "wasteland",
     "毒源": "poisonSource",
     "泄密": "leakSecrets",
+    "引爆": "detonate",
+    "自爆": "detonate",
+    "威胁": "threaten",
+    "冷静": "calm",
+    "大鱼": "bigFish",
+    "鱼饵": "bait",
+    "打捞": "salvage",
+    "抢单": "rushOrder",
+    "差评": "badReview",
+    "外卖": "delivery",
+    "劣币": "badCoin",
+    "假货": "fakeGoods",
     "筷子": "chopsticks",
+    "断点": "defuse",
+    "腐蚀": "corrode",
+    "封禁": "lockdown",
+    "火药": "gunpowder",
 }
 
 
@@ -156,7 +187,7 @@ def _row_unlocked_flag(row: dict, headers: list[str]) -> bool:
     return False
 
 
-def row_to_entry(row: dict, unlocked: bool) -> dict | None:
+def row_to_entry(row: dict, unlocked: bool, negative: bool = False, special: bool = False) -> dict | None:
     rid = row.get("ID")
     if rid is None or (isinstance(rid, float) and math.isnan(rid)):
         return None
@@ -169,14 +200,20 @@ def row_to_entry(row: dict, unlocked: bool) -> dict | None:
     base_score = _cell_int(row.get("基础分"), 0)
     effect_name = _cell_str(row.get("效果名"))
     effect_desc = _cell_str(row.get("效果"))
+    if entry_id == 33 and effect_name == "引爆":
+        effect_name = "自爆"
 
     if "炸弹" in effect_name:
         card = {"type": "bomb", "value": 0}
     else:
         card = {"type": "score", "value": base_score}
-        effect_key = EFFECT_BY_CARD_ID.get(entry_id) or EFFECT_BY_NAME.get(effect_name)
+        effect_key = (None if negative or special else EFFECT_BY_CARD_ID.get(entry_id)) or EFFECT_BY_NAME.get(effect_name)
         if effect_key:
             card["effect"] = effect_key
+        if negative:
+            card["negativeCard"] = True
+        if special:
+            card["specialCard"] = True
 
     name_col = ""
     for col in NAME_COLUMNS:
@@ -189,6 +226,8 @@ def row_to_entry(row: dict, unlocked: bool) -> dict | None:
             break
 
     if name_col:
+        if entry_id == 33 and name_col == "引爆":
+            name_col = "自爆"
         card["displayName"] = name_col
     elif card["type"] == "bomb":
         card["displayName"] = effect_name if effect_name else "炸弹"
@@ -199,6 +238,8 @@ def row_to_entry(row: dict, unlocked: bool) -> dict | None:
 
     return {
         "id": entry_id,
+        "negative": negative,
+        "special": special,
         "unlocked": unlocked,
         "shopPrice": shop_price,
         "baseScore": base_score,
@@ -238,17 +279,81 @@ def read_full_table(path: Path) -> list[dict]:
     return out
 
 
+def read_negative_table(path: Path) -> list[dict]:
+    wb = load_workbook(path, read_only=True, data_only=True)
+    if SHEET_NEGATIVE_TABLE not in wb.sheetnames:
+        wb.close()
+        return []
+
+    ws = wb[SHEET_NEGATIVE_TABLE]
+    rows_iter = ws.iter_rows(values_only=True)
+    header_row = next(rows_iter, None)
+    if not header_row:
+        wb.close()
+        return []
+    headers = [_cell_str(h) for h in header_row]
+
+    out: list[dict] = []
+    for raw in rows_iter:
+        if not raw or all(c is None or (isinstance(c, float) and math.isnan(c)) for c in raw):
+            continue
+        row = dict(zip(headers, raw))
+        entry = row_to_entry(row, False, negative=True)
+        if entry:
+            out.append(entry)
+
+    wb.close()
+    out.sort(key=lambda e: e["id"])
+    print("读取负面卡 {} 张".format(len(out)))
+    return out
+
+
+def read_special_table(path: Path) -> list[dict]:
+    wb = load_workbook(path, read_only=True, data_only=True)
+    if SHEET_SPECIAL_TABLE not in wb.sheetnames:
+        wb.close()
+        return []
+
+    ws = wb[SHEET_SPECIAL_TABLE]
+    rows_iter = ws.iter_rows(values_only=True)
+    header_row = next(rows_iter, None)
+    if not header_row:
+        wb.close()
+        return []
+    headers = [_cell_str(h) for h in header_row]
+
+    out: list[dict] = []
+    for raw in rows_iter:
+        if not raw or all(c is None or (isinstance(c, float) and math.isnan(c)) for c in raw):
+            continue
+        row = dict(zip(headers, raw))
+        entry = row_to_entry(row, False, special=True)
+        if entry:
+            out.append(entry)
+
+    wb.close()
+    out.sort(key=lambda e: e["id"])
+    print("读取特殊卡 {} 张".format(len(out)))
+    return out
+
+
 def main() -> None:
     if not XLSX_PATH.is_file():
         print("找不到表格文件: {}".format(XLSX_PATH), file=sys.stderr)
         sys.exit(1)
 
     cards = read_full_table(XLSX_PATH)
+    negative_cards = read_negative_table(XLSX_PATH)
+    special_cards = read_special_table(XLSX_PATH)
     payload = {
         "version": 1,
         "source": "carddesign.xlsx",
         "sheet": SHEET_FULL_TABLE,
+        "negativeSheet": SHEET_NEGATIVE_TABLE,
+        "specialSheet": SHEET_SPECIAL_TABLE,
         "cards": cards,
+        "negativeCards": negative_cards,
+        "specialCards": special_cards,
     }
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

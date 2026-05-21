@@ -2,9 +2,13 @@
   "version": 1,
   "source": "carddesign.xlsx",
   "sheet": "全卡表",
+  "negativeSheet": "负面卡表",
+  "specialSheet": "特殊卡表",
   "cards": [
     {
       "id": 1,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 2,
       "baseScore": 1,
@@ -18,6 +22,8 @@
     },
     {
       "id": 2,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 2,
@@ -31,6 +37,8 @@
     },
     {
       "id": 3,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 6,
       "baseScore": 3,
@@ -44,20 +52,24 @@
     },
     {
       "id": 4,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": -1,
-      "effectName": "陷阱",
-      "effectDescription": "弃置：往对手弃牌堆中放入一枚“临时”炸弹",
+      "effectName": "埋伏",
+      "effectDescription": "弃置：往对手弃牌堆中放入一张“临时”炸弹",
       "card": {
         "type": "score",
         "value": -1,
         "effect": "ambush",
-        "displayName": "陷阱"
+        "displayName": "埋伏"
       }
     },
     {
       "id": 5,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 1,
@@ -72,6 +84,8 @@
     },
     {
       "id": 6,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 5,
@@ -86,6 +100,8 @@
     },
     {
       "id": 7,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 1,
@@ -100,6 +116,8 @@
     },
     {
       "id": 8,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
@@ -114,6 +132,8 @@
     },
     {
       "id": 9,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 6,
       "baseScore": 0,
@@ -128,22 +148,26 @@
     },
     {
       "id": 10,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
-      "effectName": "回收",
+      "effectName": "回滚",
       "effectDescription": "主动：选择队列中另外一张卡，将其洗回抽牌堆",
       "card": {
         "type": "score",
         "value": 1,
         "effect": "shield",
-        "displayName": "回收"
+        "displayName": "回滚"
       }
     },
     {
       "id": 11,
+      "negative": false,
+      "special": false,
       "unlocked": true,
-      "shopPrice": 5,
+      "shopPrice": 6,
       "baseScore": 0,
       "effectName": "收纳",
       "effectDescription": "被动：队列中每有1个分数低于2的卡牌，则自身+1分",
@@ -156,6 +180,8 @@
     },
     {
       "id": 12,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 0,
@@ -170,6 +196,8 @@
     },
     {
       "id": 13,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
@@ -184,6 +212,8 @@
     },
     {
       "id": 14,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 3,
       "baseScore": 0,
@@ -198,6 +228,8 @@
     },
     {
       "id": 15,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 0,
@@ -212,6 +244,8 @@
     },
     {
       "id": 16,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 6,
       "baseScore": 0,
@@ -226,6 +260,8 @@
     },
     {
       "id": 17,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
@@ -240,6 +276,8 @@
     },
     {
       "id": 18,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 4,
@@ -254,6 +292,8 @@
     },
     {
       "id": 19,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 3,
       "baseScore": 1,
@@ -268,6 +308,8 @@
     },
     {
       "id": 20,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
@@ -282,6 +324,8 @@
     },
     {
       "id": 21,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 0,
@@ -296,20 +340,24 @@
     },
     {
       "id": 22,
+      "negative": false,
+      "special": false,
       "unlocked": true,
-      "shopPrice": 8,
+      "shopPrice": 6,
       "baseScore": 0,
-      "effectName": "泄密",
-      "effectDescription": "被动：对手队列中每有1个炸弹，自身+3分",
+      "effectName": "火药",
+      "effectDescription": "被动：对手队列中每有1个炸弹，自身+2分",
       "card": {
         "type": "score",
         "value": 0,
         "effect": "leakSecrets",
-        "displayName": "泄密"
+        "displayName": "火药"
       }
     },
     {
       "id": 23,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 1,
@@ -324,6 +372,8 @@
     },
     {
       "id": 24,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 6,
       "baseScore": 1,
@@ -338,6 +388,8 @@
     },
     {
       "id": 25,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 8,
       "baseScore": 0,
@@ -352,6 +404,8 @@
     },
     {
       "id": 26,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 6,
       "baseScore": 1,
@@ -366,6 +420,8 @@
     },
     {
       "id": 27,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
@@ -380,6 +436,8 @@
     },
     {
       "id": 28,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 2,
@@ -394,6 +452,8 @@
     },
     {
       "id": 29,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 5,
       "baseScore": 1,
@@ -408,6 +468,8 @@
     },
     {
       "id": 30,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 0,
@@ -422,20 +484,24 @@
     },
     {
       "id": 31,
+      "negative": false,
+      "special": false,
       "unlocked": true,
-      "shopPrice": 6,
+      "shopPrice": 5,
       "baseScore": 1,
-      "effectName": "拆除",
-      "effectDescription": "主动：抽一张牌，如果是炸弹则将其弃置且不会受到伤害",
+      "effectName": "断点",
+      "effectDescription": "主动：抽一张牌并立即将其弃掉，如果是炸弹不会受到伤害",
       "card": {
         "type": "score",
         "value": 1,
         "effect": "defuse",
-        "displayName": "拆除"
+        "displayName": "断点"
       }
     },
     {
       "id": 32,
+      "negative": false,
+      "special": false,
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
@@ -446,6 +512,269 @@
         "value": 1,
         "effect": "chopsticks",
         "displayName": "筷子"
+      }
+    },
+    {
+      "id": 33,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 0,
+      "effectName": "自爆",
+      "effectDescription": "主动：双方均扣除1点阈值点",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "detonate",
+        "displayName": "自爆"
+      }
+    },
+    {
+      "id": 34,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 0,
+      "effectName": "威胁",
+      "effectDescription": "主动：对方立即将弃牌堆洗回抽牌堆",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "threaten",
+        "displayName": "威胁"
+      }
+    },
+    {
+      "id": 35,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": -3,
+      "effectName": "冷静",
+      "effectDescription": "被动：每当被抽取时，回复1点阈值点",
+      "card": {
+        "type": "score",
+        "value": -3,
+        "effect": "calm",
+        "displayName": "冷静"
+      }
+    },
+    {
+      "id": 36,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 2,
+      "effectName": "大鱼",
+      "effectDescription": "被动：如果是从弃牌堆进入队列，则自身+3分",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "bigFish",
+        "displayName": "大鱼"
+      }
+    },
+    {
+      "id": 37,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 0,
+      "effectName": "小鱼",
+      "effectDescription": "被动：每次进入弃牌堆，本局期间+2分",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "bait",
+        "displayName": "小鱼"
+      }
+    },
+    {
+      "id": 38,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 7,
+      "baseScore": 2,
+      "effectName": "打捞",
+      "effectDescription": "主动：将你的弃牌堆立即洗回抽牌堆",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "salvage",
+        "displayName": "打捞"
+      }
+    },
+    {
+      "id": 39,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 2,
+      "effectName": "抢单",
+      "effectDescription": "主动：立即再抽2张，然后自身+2分",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "rushOrder",
+        "displayName": "抢单"
+      }
+    },
+    {
+      "id": 40,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 1,
+      "effectName": "差评",
+      "effectDescription": "主动：选择对手队列中一张卡，使其分数减半（向下取整）",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "badReview",
+        "displayName": "差评"
+      }
+    },
+    {
+      "id": 41,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 3,
+      "baseScore": 2,
+      "effectName": "外卖",
+      "effectDescription": "被动：抽取时，往对手队列中中加入一张临时的1分",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "delivery",
+        "displayName": "外卖"
+      }
+    },
+    {
+      "id": 42,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 3,
+      "baseScore": 0,
+      "effectName": "劣币",
+      "effectDescription": "被动：队列中每有一张劣币，自身+1分",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "badCoin",
+        "displayName": "劣币"
+      }
+    },
+    {
+      "id": 43,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 6,
+      "effectName": "假货",
+      "effectDescription": "被动：每次进入弃牌堆，本局期间-2分",
+      "card": {
+        "type": "score",
+        "value": 6,
+        "effect": "fakeGoods",
+        "displayName": "假货"
+      }
+    }
+  ],
+  "negativeCards": [
+    {
+      "id": 1,
+      "negative": true,
+      "special": false,
+      "unlocked": false,
+      "shopPrice": 4,
+      "baseScore": -2,
+      "effectName": "",
+      "effectDescription": "",
+      "card": {
+        "type": "score",
+        "value": -2,
+        "negativeCard": true,
+        "displayName": "负二"
+      }
+    },
+    {
+      "id": 2,
+      "negative": true,
+      "special": false,
+      "unlocked": false,
+      "shopPrice": 4,
+      "baseScore": 0,
+      "effectName": "腐蚀",
+      "effectDescription": "被动：每再抽1张，则自身-1分",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "corrode",
+        "negativeCard": true,
+        "displayName": "腐蚀"
+      }
+    },
+    {
+      "id": 3,
+      "negative": true,
+      "special": false,
+      "unlocked": false,
+      "shopPrice": 4,
+      "baseScore": 0,
+      "effectName": "封禁",
+      "effectDescription": "被动：抽到时，立即停牌",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "lockdown",
+        "negativeCard": true,
+        "displayName": "封禁"
+      }
+    },
+    {
+      "id": 4,
+      "negative": true,
+      "special": false,
+      "unlocked": false,
+      "shopPrice": 4,
+      "baseScore": 0,
+      "effectName": "火药",
+      "effectDescription": "被动：抽到炸弹时，额外扣除1点阈值",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "gunpowder",
+        "negativeCard": true,
+        "displayName": "火药"
+      }
+    }
+  ],
+  "specialCards": [
+    {
+      "id": 1,
+      "negative": false,
+      "special": true,
+      "unlocked": false,
+      "shopPrice": 4,
+      "baseScore": 0,
+      "effectName": "神像",
+      "effectDescription": "自身分数等于对手队列中分数最高的",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "specialCard": true,
+        "displayName": "神像"
       }
     }
   ]

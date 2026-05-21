@@ -32,6 +32,20 @@ const EFFECT_FRONTRUNNER = "frontrunner";
 const EFFECT_HOOK = "hook";
 const EFFECT_DEFUSE = "defuse";
 const EFFECT_CHOPSTICKS = "chopsticks";
+const EFFECT_DETONATE = "detonate";
+const EFFECT_THREATEN = "threaten";
+const EFFECT_CALM = "calm";
+const EFFECT_CORRODE = "corrode";
+const EFFECT_LOCKDOWN = "lockdown";
+const EFFECT_GUNPOWDER = "gunpowder";
+const EFFECT_BIG_FISH = "bigFish";
+const EFFECT_BAIT = "bait";
+const EFFECT_SALVAGE = "salvage";
+const EFFECT_RUSH_ORDER = "rushOrder";
+const EFFECT_BAD_REVIEW = "badReview";
+const EFFECT_DELIVERY = "delivery";
+const EFFECT_BAD_COIN = "badCoin";
+const EFFECT_FAKE_GOODS = "fakeGoods";
 const CATALOG_EFFECT_BY_ID = {
   4: EFFECT_AMBUSH,
   5: EFFECT_COPY,
@@ -61,7 +75,18 @@ const CATALOG_EFFECT_BY_ID = {
   29: EFFECT_FRONTRUNNER,
   30: EFFECT_HOOK,
   31: EFFECT_DEFUSE,
-  32: EFFECT_CHOPSTICKS
+  32: EFFECT_CHOPSTICKS,
+  33: EFFECT_DETONATE,
+  34: EFFECT_THREATEN,
+  35: EFFECT_CALM,
+  36: EFFECT_BIG_FISH,
+  37: EFFECT_BAIT,
+  38: EFFECT_SALVAGE,
+  39: EFFECT_RUSH_ORDER,
+  40: EFFECT_BAD_REVIEW,
+  41: EFFECT_DELIVERY,
+  42: EFFECT_BAD_COIN,
+  43: EFFECT_FAKE_GOODS
 };
 const MAX_HP = 3;
 const WIN_TARGET = 3;
@@ -247,15 +272,15 @@ function placeCopyDuplicateInQueue(side, copyIdx, dup) {
   for (let i = copyIdx + 1; i < QUEUE_LIMIT; i += 1) {
     if (!q[i]) {
       q[i] = dup;
-      return true;
+      return i;
     }
   }
   const fallback = firstEmptyQueueSlot(side);
   if (fallback < 0) {
-    return false;
+    return -1;
   }
   q[fallback] = dup;
-  return true;
+  return fallback;
 }
 
 function swapQueuedCards(side, fromIndex, toIndex) {
@@ -369,6 +394,11 @@ const TEST_BATTLE_SLOT_DEFS = [
 ];
 const ROUTE_EVENT_PAPER_SHRINE = "paperShrine";
 const ROUTE_EVENT_HEAVY_PURSE = "heavyPurse";
+const ROUTE_EVENT_CRACKED_WISH_MACHINE = "crackedWishMachine";
+const ROUTE_EVENT_MASKED_BOMBER = "maskedBomber";
+const ROUTE_EVENT_COIN_IDOL = "coinIdol";
+const ROUTE_EVENT_GOLDEN_SCALE = "goldenScale";
+const ROUTE_EVENT_WHITE_GLOVE_DEALER = "whiteGloveDealer";
 /** 中间 7 格（不含起点与庄家）：切磋 2–3、强手 1–2、事件 1–2、黑市 1–2 */
 const ROUTE_MIDDLE_COUNT_OPTIONS = [
   [3, 2, 1, 1],
@@ -432,7 +462,7 @@ const EFFECTS = {
   },
   ambush: {
     trigger: "passive",
-    description: "弃置：往对手抽牌堆中随机放入一枚临时炸弹。"
+    description: "弃置：往对手弃牌堆中随机放入一枚临时炸弹。"
   },
   copy: {
     trigger: "active",
@@ -493,7 +523,7 @@ const EFFECTS = {
   },
   leakSecrets: {
     trigger: "passive",
-    description: "被动：对手队列中每有 1 张炸弹，自身筹码便 +3。"
+    description: "被动：对手队列中每有 1 张炸弹，自身筹码便 +2。"
   },
   swap: {
     trigger: "active",
@@ -513,7 +543,7 @@ const EFFECTS = {
   },
   strengthen: {
     trigger: "active",
-    description: "主动：选择队列中另外一张牌，使其 +2 分。"
+    description: "主动：选择队列中另外一张牌，使其临时 +2 分；该牌离开队列后移除加成。"
   },
   nimble: {
     trigger: "passive",
@@ -529,11 +559,67 @@ const EFFECTS = {
   },
   defuse: {
     trigger: "active",
-    description: "主动：抽一张牌，如果是炸弹则将其弃置且不会受到伤害。"
+    description: "主动：抽一张牌并立即将其弃掉；如果是炸弹，不会受到伤害。"
   },
   chopsticks: {
     trigger: "passive",
     description: "被动：被抽取时，在队列中加入一张临时的 1 分。"
+  },
+  detonate: {
+    trigger: "active",
+    description: "主动：双方均扣除 1 点阈值。"
+  },
+  threaten: {
+    trigger: "active",
+    description: "主动：对手立即将弃牌堆洗回抽牌堆。"
+  },
+  calm: {
+    trigger: "passive",
+    description: "被动：被抽取时，回复 1 点阈值。"
+  },
+  corrode: {
+    trigger: "passive",
+    description: "被动：你每再抽 1 张牌，本牌筹码 -1。"
+  },
+  lockdown: {
+    trigger: "passive",
+    description: "被动：抽到时立即停牌。"
+  },
+  gunpowder: {
+    trigger: "passive",
+    description: "被动：在队列中时，抽到炸弹会额外失去 1 点阈值。"
+  },
+  bigFish: {
+    trigger: "passive",
+    description: "被动：如果是从弃牌堆进入队列，则自身 +3 分。"
+  },
+  bait: {
+    trigger: "passive",
+    description: "被动：每次进入弃牌堆，本局期间 +1 分。"
+  },
+  salvage: {
+    trigger: "active",
+    description: "主动：将你的弃牌堆立即洗回抽牌堆。"
+  },
+  rushOrder: {
+    trigger: "active",
+    description: "主动：立即再抽 2 张，然后自身本局 +2 分。"
+  },
+  badReview: {
+    trigger: "active",
+    description: "主动：选择对手队列中一张记分牌，使其本局分数减半（向下取整）。"
+  },
+  delivery: {
+    trigger: "passive",
+    description: "被动：抽取时，往对手队列中加入一张临时 1 分。"
+  },
+  badCoin: {
+    trigger: "passive",
+    description: "被动：队列中每有一张劣币，自身+1分。"
+  },
+  fakeGoods: {
+    trigger: "passive",
+    description: "被动：每次进入弃牌堆，本局期间-2分。"
   }
 };
 const PLAYER_STARTING_DECK_FALLBACK = [
@@ -683,6 +769,8 @@ let matchVictoryRewardAt = 0;
 let routeMapEnteredAt = 0;
 let bossBombRewardFlight = null;
 let cardsCatalogEntries = null;
+let negativeCardsCatalogEntries = [];
+let specialCardsCatalogEntries = [];
 let catalogById = {};
 let catalogDisplayNameToId = {};
 let thiefDeckCardIds = null;
@@ -994,6 +1082,14 @@ function normalizeCatalogCard(raw) {
     card.displayName = raw.displayName;
   }
 
+  if (raw.negativeCard === true) {
+    card.negativeCard = true;
+  }
+
+  if (raw.specialCard === true) {
+    card.specialCard = true;
+  }
+
   return card;
 }
 
@@ -1036,6 +1132,34 @@ function ensureEngineEffectFromCatalog(card, catalogId, effectNameRow) {
   }
   if (en === "魅魔") {
     card.effect = EFFECT_LEECH;
+    return;
+  }
+  if (en === "埋伏" || en === "陷阱") {
+    card.effect = EFFECT_AMBUSH;
+    return;
+  }
+  if (en === "引爆" || en === "自爆") {
+    card.effect = EFFECT_DETONATE;
+    return;
+  }
+  if (en === "威胁") {
+    card.effect = EFFECT_THREATEN;
+    return;
+  }
+  if (en === "冷静") {
+    card.effect = EFFECT_CALM;
+    return;
+  }
+  if (en === "大鱼" || en === "澶ч奔") {
+    card.effect = EFFECT_BIG_FISH;
+    return;
+  }
+  if (en === "鱼饵" || en === "楸奸サ") {
+    card.effect = EFFECT_BAIT;
+    return;
+  }
+  if (en === "打捞" || en === "鎵撴崬") {
+    card.effect = EFFECT_SALVAGE;
   }
 }
 
@@ -1089,11 +1213,61 @@ function applyCardsCatalogPayload(data) {
       card: card
     };
   });
+
+  negativeCardsCatalogEntries = Array.isArray(data.negativeCards)
+    ? data.negativeCards.map(function (row) {
+        const card = normalizeCatalogCard(row.card);
+        card.negativeCard = true;
+        attachCatalogMetadataToCard(card, {
+          effectName: row.effectName,
+          effectDescription: row.effectDescription
+        });
+        ensureEngineEffectFromCatalog(card, null, row.effectName);
+        return {
+          id: row.id,
+          negative: true,
+          unlocked: false,
+          effectName: row.effectName || "",
+          effectDescription: row.effectDescription || "",
+          card: card
+        };
+      })
+    : [];
+
+  specialCardsCatalogEntries = Array.isArray(data.specialCards)
+    ? data.specialCards.map(function (row) {
+        const card = normalizeCatalogCard(row.card);
+        card.specialCard = true;
+        attachCatalogMetadataToCard(card, {
+          effectName: row.effectName,
+          effectDescription: row.effectDescription
+        });
+        ensureEngineEffectFromCatalog(card, null, row.effectName);
+        return {
+          id: row.id,
+          special: true,
+          unlocked: false,
+          effectName: row.effectName || "",
+          effectDescription: row.effectDescription || "",
+          card: card
+        };
+      })
+    : [];
+}
+
+function getNegativeCatalogEntries() {
+  return negativeCardsCatalogEntries || [];
+}
+
+function getSpecialCatalogEntries() {
+  return specialCardsCatalogEntries || [];
 }
 
 function getRewardCatalogEntries() {
   if (cardsCatalogEntries && cardsCatalogEntries.length > 0) {
-    return cardsCatalogEntries;
+    return cardsCatalogEntries.filter(function (entry) {
+      return entry && entry.card && entry.card.negativeCard !== true && entry.card.specialCard !== true;
+    });
   }
 
   return CARD_REWARD_POOL_FALLBACK.map(function (card, index) {
@@ -1115,7 +1289,15 @@ function getShopCatalogEntries() {
   }
 
   return cardsCatalogEntries.filter(function (e) {
-    return e && e.unlocked === true && e.id != null && e.card && typeof e.card === "object";
+    return (
+      e &&
+      e.unlocked === true &&
+      e.id != null &&
+      e.card &&
+      typeof e.card === "object" &&
+      e.card.negativeCard !== true &&
+      e.card.specialCard !== true
+    );
   });
 }
 
@@ -1900,11 +2082,17 @@ function countRemovableRunCards() {
 }
 
 function openRandomRouteEvent(node) {
-  if (Math.random() < 0.5) {
-    openPaperShrineEvent(node);
-    return;
-  }
-  openHeavyPurseEvent(node);
+  const events = [
+    openPaperShrineEvent,
+    openHeavyPurseEvent,
+    openCrackedWishMachineEvent,
+    openMaskedBomberEvent,
+    openCoinIdolEvent,
+    openGoldenScaleEvent,
+    openWhiteGloveDealerEvent
+  ];
+  const openEvent = events[Math.floor(Math.random() * events.length)];
+  openEvent(node);
 }
 
 function openPaperShrineEvent(node) {
@@ -1952,8 +2140,8 @@ function openHeavyPurseEvent(node) {
       {
         id: "takePurse",
         name: "拿走钱袋",
-        detail: "获得5金币，随机移除牌库中1张牌。",
-        minCards: 1
+        detail: "获得8金币，但加入1张随机负面卡。",
+        minCards: 0
       },
       {
         id: "takeCoins",
@@ -1973,11 +2161,208 @@ function openHeavyPurseEvent(node) {
   buttons = {};
 }
 
+function openCrackedWishMachineEvent(node) {
+  ensureRunState();
+  modal = {
+    type: "routeEvent",
+    eventId: ROUTE_EVENT_CRACKED_WISH_MACHINE,
+    nodeId: node ? node.id : null,
+    title: "裂窗许愿机",
+    description: "一台玻璃裂开的许愿机卡在路边，只有一张卡牌放在橱窗中间。",
+    choices: [
+      {
+        id: "reachWishMachine",
+        name: "伸手去拿",
+        detail: "下场战斗的初始阈值 -1，获得1张“三分”。",
+        minCards: 0
+      },
+      {
+        id: "coinWishMachine",
+        name: "投币进去",
+        detail: "失去3金币，获得1张“三分”。",
+        minCards: 0,
+        minGold: 3
+      },
+      {
+        id: "leaveWishMachine",
+        name: "选择离开",
+        detail: "无事发生。",
+        minCards: 0
+      }
+    ]
+  };
+  modalStack = [];
+  buttons = {};
+}
+
+function openMaskedBomberEvent(node) {
+  ensureRunState();
+  modal = {
+    type: "routeEvent",
+    eventId: ROUTE_EVENT_MASKED_BOMBER,
+    nodeId: node ? node.id : null,
+    title: "面罩炸弹匠",
+    description: "一个戴着焊接面罩的人正在调试一枚奇怪的炸弹。火花在面罩边缘跳动，他却把你招到工作台前。",
+    choices: [
+      {
+        id: "takeStrangeBomb",
+        name: "拿走炸弹",
+        detail: "阈值上限 +1，卡组中加入1张炸弹。",
+        minCards: 0
+      },
+      {
+        id: "watchFromSide",
+        name: "一旁观察",
+        detail: "获得1张“断点”。",
+        minCards: 0
+      },
+      {
+        id: "stepCloser",
+        name: "走进观察",
+        detail: "阈值上限 -1，卡组中减少1张炸弹。",
+        minCards: 0,
+        minBombs: 1,
+        minPlayerMaxHpAbove: 1
+      }
+    ]
+  };
+  modalStack = [];
+  buttons = {};
+}
+
+function openCoinIdolEvent(node) {
+  ensureRunState();
+  modal = {
+    type: "routeEvent",
+    eventId: ROUTE_EVENT_COIN_IDOL,
+    nodeId: node ? node.id : null,
+    title: "吞币神像",
+    description: "一尊没有五官的金属神像挡在路边。它的腹部有一道狭长裂口，里面传来金币滚动的声音。",
+    choices: [
+      {
+        id: "emptyPurseForIdol",
+        name: "倒空钱袋",
+        detail: "失去当前所有金币，获得1张“神像”。",
+        minCards: 0
+      },
+      {
+        id: "feedCoinsToIdol",
+        name: "投入金币",
+        detail: "投入2枚金币，有10%概率获得1张“神像”。可重复选择。",
+        minCards: 0,
+        minGold: 2
+      },
+      {
+        id: "prayAndLeaveIdol",
+        name: "祈祷离开",
+        detail: "获得2金币。",
+        minCards: 0
+      }
+    ]
+  };
+  modalStack = [];
+  buttons = {};
+}
+
+function openGoldenScaleEvent(node) {
+  ensureRunState();
+  modal = {
+    type: "routeEvent",
+    eventId: ROUTE_EVENT_GOLDEN_SCALE,
+    nodeId: node ? node.id : null,
+    title: "双面金秤",
+    description: "一架没有支点的金秤悬在路边。秤盘一边放着一枚金币，另一边空无一物。当你靠近时，金币自己裂成了两枚。",
+    choices: [
+      {
+        id: "placePurseOnScale",
+        name: "放上钱袋",
+        detail: "当前金币翻倍，加入1张随机负面卡。",
+        minCards: 0
+      },
+      {
+        id: "placeCoinsOnScale",
+        name: "放上金币",
+        detail: "投入5枚金币，获得10枚金币。",
+        minCards: 0,
+        minGold: 5
+      },
+      {
+        id: "leaveGoldenScale",
+        name: "选择离开",
+        detail: "无事发生。",
+        minCards: 0
+      }
+    ]
+  };
+  modalStack = [];
+  buttons = {};
+}
+
+function openWhiteGloveDealerEvent(node) {
+  ensureRunState();
+  modal = {
+    type: "routeEvent",
+    eventId: ROUTE_EVENT_WHITE_GLOVE_DEALER,
+    nodeId: node ? node.id : null,
+    title: "白手套荷官",
+    description: "一个戴白手套的荷官站在路边洗牌。他看着你，却准确地从牌堆里抽出一张A。“下一局，我可以让牌面温柔一点。”",
+    choices: [
+      {
+        id: "bribeDealer",
+        name: "买通荷官",
+        detail: "失去5金币，下一场游戏的阈值上限 +1。",
+        minCards: 0,
+        minGold: 5
+      },
+      {
+        id: "dealerShuffle",
+        name: "重新洗牌",
+        detail: "随机失去2张牌，然后随机获得2张新牌。",
+        minCards: 2
+      },
+      {
+        id: "refuseDealer",
+        name: "拒绝帮忙",
+        detail: "无事发生。",
+        minCards: 0
+      }
+    ]
+  };
+  modalStack = [];
+  buttons = {};
+}
+
 function canChooseRouteEventOption(choice) {
   if (!choice) {
     return false;
   }
-  return countRemovableRunCards() >= (choice.minCards || 0);
+  ensureRunState();
+  return (
+    countRemovableRunCards() >= (choice.minCards || 0) &&
+    runState.gold >= (choice.minGold || 0) &&
+    countRunDeckBombs() >= (choice.minBombs || 0) &&
+    getPlayerMaxHp() > (choice.minPlayerMaxHpAbove || 0)
+  );
+}
+
+function getRouteEventOptionDisabledReason(choice) {
+  if (!choice) {
+    return "";
+  }
+  ensureRunState();
+  if (countRemovableRunCards() < (choice.minCards || 0)) {
+    return "可移除牌不足";
+  }
+  if (runState.gold < (choice.minGold || 0)) {
+    return "金币不足";
+  }
+  if (countRunDeckBombs() < (choice.minBombs || 0)) {
+    return "炸弹不足";
+  }
+  if (choice.minPlayerMaxHpAbove != null && getPlayerMaxHp() <= choice.minPlayerMaxHpAbove) {
+    return "阈值上限已最低";
+  }
+  return "";
 }
 
 function chooseRouteEventOption(index) {
@@ -1988,7 +2373,7 @@ function chooseRouteEventOption(index) {
 
   const choice = modal.choices && modal.choices[index];
   if (!choice || !canChooseRouteEventOption(choice)) {
-    showTip("可移除的牌不够。", 1800);
+    showTip(getRouteEventOptionDisabledReason(choice) || "无法选择。", 1800);
     return;
   }
 
@@ -2026,12 +2411,17 @@ function chooseRouteEventOption(index) {
   }
 
   if (choice.id === "takePurse") {
-    runState.gold += 5;
-    const removed = removeRandomRunCards(1);
-    showRemovedRunCardsTip(removed, "获得5金币，");
-    modal = null;
-    modalStack = [];
-    enterRouteMap();
+    runState.gold += 8;
+    const curse = gainRandomNegativeEventCard();
+    if (curse) {
+      showTip("获得8金币，负面卡加入牌库：" + getCardName(curse), 2600);
+      openRouteEventCardRewardModal(curse);
+    } else {
+      modal = null;
+      modalStack = [];
+      showTip("获得8金币。", 2200);
+      enterRouteMap();
+    }
     return;
   }
 
@@ -2053,6 +2443,184 @@ function chooseRouteEventOption(index) {
       modalStack = [];
       enterRouteMap();
     }
+    return;
+  }
+
+  if (choice.id === "reachWishMachine") {
+    runState.nextBattleInitialHpPenalty = Math.max(1, runState.nextBattleInitialHpPenalty || 0);
+    const gained = gainCatalogCardById(3);
+    if (gained) {
+      showTip("下场战斗初始阈值 -1，获得卡牌：" + getCardName(gained), 2600);
+      openRouteEventCardRewardModal(gained);
+    } else {
+      modal = null;
+      modalStack = [];
+      showTip("下场战斗初始阈值 -1。", 2200);
+      enterRouteMap();
+    }
+    return;
+  }
+
+  if (choice.id === "coinWishMachine") {
+    runState.gold -= 3;
+    const gained = gainCatalogCardById(3);
+    if (gained) {
+      showTip("失去3金币，获得卡牌：" + getCardName(gained), 2200);
+      openRouteEventCardRewardModal(gained);
+    } else {
+      modal = null;
+      modalStack = [];
+      showTip("失去3金币。", 1800);
+      enterRouteMap();
+    }
+    return;
+  }
+
+  if (choice.id === "leaveWishMachine") {
+    modal = null;
+    modalStack = [];
+    showTip("你离开了许愿机。", 1600);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "takeStrangeBomb") {
+    runState.playerMaxHp = getPlayerMaxHp() + 1;
+    const bomb = cloneFirstBombCardFromCatalog();
+    runState.deck.push(bomb);
+    modal = null;
+    modalStack = [];
+    showTip("阈值上限 +1，卡组加入1张炸弹。", 2600);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "watchFromSide") {
+    const gained = gainCatalogCardById(31);
+    if (gained) {
+      showTip("获得卡牌：" + getCardName(gained), 2200);
+      openRouteEventCardRewardModal(gained);
+    } else {
+      modal = null;
+      modalStack = [];
+      showTip("你记下了一些拆弹技巧。", 1800);
+      enterRouteMap();
+    }
+    return;
+  }
+
+  if (choice.id === "stepCloser") {
+    runState.playerMaxHp = Math.max(1, getPlayerMaxHp() - 1);
+    const removed = removeOneBombFromRunDeck();
+    modal = null;
+    modalStack = [];
+    showTip(removed ? "阈值上限 -1，卡组减少1张炸弹。" : "阈值上限 -1。", 2600);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "emptyPurseForIdol") {
+    const paid = Math.max(0, runState.gold | 0);
+    runState.gold = 0;
+    const gained = gainSpecialCatalogCardById(1);
+    if (gained) {
+      showTip("失去" + paid + "金币，获得卡牌：" + getCardName(gained), 2600);
+      openRouteEventCardRewardModal(gained);
+    } else {
+      modal = null;
+      modalStack = [];
+      showTip("失去" + paid + "金币。", 1800);
+      enterRouteMap();
+    }
+    return;
+  }
+
+  if (choice.id === "feedCoinsToIdol") {
+    runState.gold -= 2;
+    if (Math.random() < 0.1) {
+      const gained = gainSpecialCatalogCardById(1);
+      showTip(gained ? "神像回应了你，获得卡牌：" + getCardName(gained) : "神像回应了你。", 2400);
+    } else {
+      showTip("金币滚入裂口，什么也没有发生。", 1800);
+    }
+    return;
+  }
+
+  if (choice.id === "prayAndLeaveIdol") {
+    runState.gold += 2;
+    modal = null;
+    modalStack = [];
+    showTip("获得2金币。", 1800);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "placePurseOnScale") {
+    const before = Math.max(0, runState.gold | 0);
+    runState.gold = before * 2;
+    const curse = gainRandomNegativeEventCard();
+    if (curse) {
+      showTip("金币翻倍，负面卡加入牌库：" + getCardName(curse), 2600);
+      openRouteEventCardRewardModal(curse);
+    } else {
+      modal = null;
+      modalStack = [];
+      showTip("金币翻倍。", 1800);
+      enterRouteMap();
+    }
+    return;
+  }
+
+  if (choice.id === "placeCoinsOnScale") {
+    runState.gold += 5;
+    modal = null;
+    modalStack = [];
+    showTip("投入5枚金币，获得10枚金币。", 2200);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "leaveGoldenScale") {
+    modal = null;
+    modalStack = [];
+    showTip("你无视了金秤。", 1600);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "bribeDealer") {
+    runState.gold -= 5;
+    runState.nextBattleMaxHpBonus = Math.max(1, runState.nextBattleMaxHpBonus || 0);
+    modal = null;
+    modalStack = [];
+    showTip("下一场游戏阈值上限 +1。", 2200);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "dealerShuffle") {
+    const removed = removeRandomRunCards(2);
+    const gained = [];
+    for (let i = 0; i < 2; i += 1) {
+      const card = gainRandomEventCard("any");
+      if (card) {
+        gained.push(card);
+      }
+    }
+    modal = null;
+    modalStack = [];
+    const removedText = removed.length ? "失去：" + removed.map(getCardName).join("、") + "。" : "";
+    const gainedText = gained.length ? "获得：" + gained.map(getCardName).join("、") + "。" : "";
+    showTip((removedText + gainedText) || "牌组被重新洗过。", 3000);
+    enterRouteMap();
+    return;
+  }
+
+  if (choice.id === "refuseDealer") {
+    modal = null;
+    modalStack = [];
+    showTip("你拒绝了荷官。", 1600);
+    enterRouteMap();
   }
 }
 
@@ -2146,6 +2714,24 @@ function removeRandomRunCards(count) {
   return removed;
 }
 
+function countRunDeckBombs() {
+  ensureRunState();
+  return runState.deck.reduce(function (count, card) {
+    return count + (card && card.type === CARD_BOMB ? 1 : 0);
+  }, 0);
+}
+
+function removeOneBombFromRunDeck() {
+  ensureRunState();
+  const index = runState.deck.findIndex(function (card) {
+    return card && card.type === CARD_BOMB;
+  });
+  if (index < 0) {
+    return null;
+  }
+  return runState.deck.splice(index, 1)[0];
+}
+
 function gainRandomEventCard(tier) {
   ensureRunState();
   const card = takeRandomEventCard(tier);
@@ -2154,6 +2740,65 @@ function gainRandomEventCard(tier) {
     return card;
   }
   return null;
+}
+
+function gainCatalogCardById(id) {
+  ensureRunState();
+  const card = resolveCatalogDeckSlot(id);
+  if (!card) {
+    return null;
+  }
+  runState.deck.push(card);
+  return card;
+}
+
+function gainRandomNegativeEventCard() {
+  ensureRunState();
+  const entries = shuffle(getNegativeCatalogEntries().slice());
+  if (entries.length === 0) {
+    return null;
+  }
+  const entry = entries[0];
+  if (!entry || !entry.card) {
+    return null;
+  }
+  const card = cloneCard(entry.card);
+  const cid = Number(entry.id);
+  if (!isNaN(cid)) {
+    card.negativeCatalogId = cid;
+  }
+  card.negativeCard = true;
+  runState.deck.push(card);
+  return card;
+}
+
+function gainSpecialCatalogCardById(id) {
+  ensureRunState();
+  const entries = getSpecialCatalogEntries();
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (!entry || Number(entry.id) !== Number(id) || !entry.card) {
+      continue;
+    }
+    const card = cloneCard(entry.card);
+    const cid = Number(entry.id);
+    if (!isNaN(cid)) {
+      card.specialCatalogId = cid;
+    }
+    card.specialCard = true;
+    runState.deck.push(card);
+    return card;
+  }
+  return null;
+}
+
+function gainRandomSpecialEventCard() {
+  ensureRunState();
+  const entries = shuffle(getSpecialCatalogEntries().slice());
+  if (entries.length === 0) {
+    return null;
+  }
+  return gainSpecialCatalogCardById(entries[0].id);
 }
 
 function takeRandomEventCard(tier) {
@@ -2215,6 +2860,7 @@ function makeRunState() {
   return {
     deck: getPlayerDeckCards(),
     gold: STARTING_GOLD,
+    playerMaxHp: MAX_HP,
     battlesWon: 0,
     bossesDefeated: 0,
     removeCardCost: REMOVE_CARD_COST,
@@ -2225,6 +2871,8 @@ function makeRunState() {
     currentRouteNodeId: null,
     selectedRouteNodeId: null,
     visitedRouteNodeIds: [],
+    nextBattleInitialHpPenalty: 0,
+    nextBattleMaxHpBonus: 0,
     opponentChoices: DEFAULT_OPPONENT_CHOICES.map(function (opponent) {
       return Object.assign({}, opponent);
     })
@@ -2242,6 +2890,18 @@ function makePlayerDeck(deckCards) {
   return shuffle(source.map(cloneCard));
 }
 
+function getPlayerMaxHp() {
+  ensureRunState();
+  const hp = Number(runState.playerMaxHp);
+  return !isNaN(hp) && hp > 0 ? Math.max(1, Math.floor(hp)) : MAX_HP;
+}
+
+function getSideMaxHp(side) {
+  const base = side && side.id === "player" ? getPlayerMaxHp() : MAX_HP;
+  const bonus = side && typeof side.maxHpBonus === "number" && !isNaN(side.maxHpBonus) ? side.maxHpBonus : 0;
+  return Math.max(1, base + bonus);
+}
+
 function shuffle(cards) {
   const copy = cards.slice();
   for (let i = copy.length - 1; i > 0; i -= 1) {
@@ -2254,10 +2914,11 @@ function shuffle(cards) {
 }
 
 function makeSide(id, name, deckCards) {
+  const maxHp = id === "player" ? getPlayerMaxHp() : MAX_HP;
   return {
     id: id,
     name: name,
-    hp: MAX_HP,
+    hp: maxHp,
     wins: 0,
     roundScore: 0,
     drawPile: makePlayerDeck(deckCards),
@@ -2432,6 +3093,8 @@ function enterRunVictory() {
 function startBattle(opponentName, aiDeckOverride, opponentLinesExplicit, aiStyleExplicit) {
   ensureRunState();
   const aiDeck = aiDeckOverride && aiDeckOverride.length ? aiDeckOverride : undefined;
+  const nextBattleMaxHpBonus = Math.max(0, runState.nextBattleMaxHpBonus | 0);
+  runState.nextBattleMaxHpBonus = 0;
   let opponentLines = normalizeOpponentLines(null);
   if (arguments.length >= 3) {
     opponentLines = normalizeOpponentLines(opponentLinesExplicit);
@@ -2454,6 +3117,8 @@ function startBattle(opponentName, aiDeckOverride, opponentLinesExplicit, aiStyl
     opponentLines: opponentLines,
     opponentSpeechBubble: null
   };
+  game.player.maxHpBonus = nextBattleMaxHpBonus;
+  game.player.hp = getSideMaxHp(game.player);
   game.ai.aiStyle = aiStyle;
   activeEffects = [];
   pendingActiveEffect = null;
@@ -2490,6 +3155,7 @@ function startRound() {
 
   resetForRound(game.player);
   resetForRound(game.ai);
+  applyNextBattleInitialHpPenalty();
   game.firstSideId = game.round % 2 === 1 ? "player" : "ai";
   game.active = game.firstSideId;
 
@@ -2499,9 +3165,26 @@ function startRound() {
   }
 }
 
+function applyNextBattleInitialHpPenalty() {
+  if (!runState || !game || game.round !== 1) {
+    return;
+  }
+
+  const penalty = Math.max(0, runState.nextBattleInitialHpPenalty | 0);
+  if (penalty <= 0) {
+    return;
+  }
+
+  runState.nextBattleInitialHpPenalty = 0;
+  game.player.hp = Math.max(0, game.player.hp - penalty);
+  hpRecoverPulse.player = null;
+  game.player.status = "许愿代价：初始阈值 -" + penalty;
+  showTip("许愿代价：本场初始阈值 -" + penalty, 2200);
+}
+
 function resetForRound(side) {
   const prevHp = side.hp;
-  side.hp = Math.min(MAX_HP, side.hp + 1);
+  side.hp = Math.min(getSideMaxHp(side), side.hp + 1);
   if (side.hp > prevHp) {
     hpRecoverPulse[side.id] = {
       slotIndex: side.hp - 1,
@@ -2575,6 +3258,39 @@ function triggerNimbleCardsAfterDraw(side, drawnCard) {
   }
 }
 
+function countQueuedEffectCards(side, effectKey) {
+  if (!side || !side.queue) {
+    return 0;
+  }
+  let count = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const card = side.queue[i];
+    if (card && card.type === CARD_SCORE && card.effect === effectKey) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function notifyOwnQueuedCardsAfterDraw(side, drawnCard) {
+  if (!side || !side.queue) {
+    return;
+  }
+
+  for (let qi = 0; qi < QUEUE_LIMIT; qi += 1) {
+    const card = side.queue[qi];
+    if (!card || card === drawnCard || card.type !== CARD_SCORE) {
+      continue;
+    }
+
+    if (card.effect === EFFECT_CORRODE) {
+      card.roundCorrodePenalty = (typeof card.roundCorrodePenalty === "number" ? card.roundCorrodePenalty : 0) - 1;
+    }
+  }
+
+  syncRoundScores();
+}
+
 function drawCard(side) {
   refillDrawPile(side);
 
@@ -2593,11 +3309,14 @@ function drawCard(side) {
   const card = side.drawPile.pop();
   const slot = firstEmptyQueueSlot(side);
   side.queue[slot] = card;
+  notifyOwnQueuedCardsAfterDraw(side, card);
 
   if (card.type === CARD_BOMB) {
     syncRoundScores();
-    side.hp = Math.max(0, side.hp - 1);
-    side.status = "惩罚牌！阈值 -1";
+    const gunpowderCount = countQueuedEffectCards(side, EFFECT_GUNPOWDER);
+    const hpLoss = 1 + gunpowderCount;
+    side.hp = Math.max(0, side.hp - hpLoss);
+    side.status = gunpowderCount > 0 ? "火药引爆！阈值 -" + hpLoss : "惩罚牌！阈值 -1";
 
     if (side.hp === 0) {
       side.busted = true;
@@ -2613,6 +3332,10 @@ function drawCard(side) {
     syncRoundScores();
     const contribution = getCardRoundContribution(card);
     side.status = contribution > card.value ? "虚张！筹码 +" + contribution : "筹码 +" + contribution;
+    if (card.effect === EFFECT_LOCKDOWN) {
+      side.stopped = true;
+      side.status = "封禁：立即停牌";
+    }
   }
 
   notifyOpponentQueuedCardsAfterDraw(side);
@@ -2662,6 +3385,26 @@ function calculateCardRoundContribution(side, card, queueIndex) {
   return calculateCardRoundContributionFor(side, getOpponent(side), card, queueIndex);
 }
 
+function isIdolCard(card) {
+  return !!(card && card.specialCard === true && card.displayName === "神像");
+}
+
+function getOpponentHighestNonIdolContribution(side, opponentSide) {
+  if (!opponentSide || !opponentSide.queue) {
+    return 0;
+  }
+
+  let best = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = opponentSide.queue[i];
+    if (!c || c.type !== CARD_SCORE || isIdolCard(c)) {
+      continue;
+    }
+    best = Math.max(best, calculateCardRoundContributionFor(opponentSide, side, c, i));
+  }
+  return best;
+}
+
 function calculateCardRoundContributionFor(side, opponent, card, queueIndex) {
   if (card.type !== CARD_SCORE) {
     return 0;
@@ -2673,8 +3416,15 @@ function calculateCardRoundContributionFor(side, opponent, card, queueIndex) {
   const idx = idxRaw >= 0 ? idxRaw : 0;
 
   let contribution = card.value;
+  if (isIdolCard(card)) {
+    contribution = getOpponentHighestNonIdolContribution(side, opponentSide);
+  }
+
   if (typeof card.roundBlessBonus === "number") {
     contribution += card.roundBlessBonus;
+  }
+  if (typeof card.roundStrengthenBonus === "number") {
+    contribution += card.roundStrengthenBonus;
   }
   if (idx > 0) {
     const prev = side.queue[idx - 1];
@@ -2711,6 +3461,10 @@ function calculateCardRoundContributionFor(side, opponent, card, queueIndex) {
     contribution += card.roundMenacePenalty;
   }
 
+  if (typeof card.roundCorrodePenalty === "number") {
+    contribution += card.roundCorrodePenalty;
+  }
+
   if (card.effect === EFFECT_WASTELAND) {
     let pollutionCount = 0;
     const opp = opponentSide;
@@ -2727,11 +3481,11 @@ function calculateCardRoundContributionFor(side, opponent, card, queueIndex) {
     let bombs = 0;
     const opp = opponentSide;
     for (let i = 0; i < QUEUE_LIMIT; i += 1) {
-      if (opp.queue[i] && opp.queue[i].type === CARD_BOMB) {
+      if (isBombForFirepower(opp.queue[i])) {
         bombs += 1;
       }
     }
-    contribution += bombs * 3;
+    contribution += bombs * 2;
   }
 
   if (card.effect === EFFECT_LEGION && isQueueFull(side)) {
@@ -2742,8 +3496,30 @@ function calculateCardRoundContributionFor(side, opponent, card, queueIndex) {
     contribution += 4;
   }
 
+  if (card.effect === EFFECT_BIG_FISH && card.roundFromDiscardPile === true) {
+    contribution += 3;
+  }
+
+  if (card.effect === EFFECT_BAIT && typeof card.baitDiscardBonus === "number") {
+    contribution += card.baitDiscardBonus;
+  }
+
+  if (card.effect === EFFECT_BAD_COIN) {
+    contribution += countQueuedEffectCards(side, EFFECT_BAD_COIN);
+  }
+
+  if (card.effect === EFFECT_FAKE_GOODS && typeof card.fakeGoodsDiscardPenalty === "number") {
+    contribution += card.fakeGoodsDiscardPenalty;
+  }
+
   if (card.effect === EFFECT_AMPLIFY) {
     contribution = card.value + (contribution - card.value) * 2;
+  }
+
+  if (typeof card.roundBadReviewCount === "number" && card.roundBadReviewCount > 0) {
+    for (let i = 0; i < card.roundBadReviewCount; i += 1) {
+      contribution = Math.floor(contribution / 2);
+    }
   }
 
   return contribution;
@@ -2758,6 +3534,18 @@ function getCardDisplayValue(card) {
     return card.roundContribution;
   }
 
+  if (card.type === CARD_SCORE && card.effect === EFFECT_BAIT && typeof card.baitDiscardBonus === "number") {
+    return card.value + card.baitDiscardBonus;
+  }
+
+  if (
+    card.type === CARD_SCORE &&
+    card.effect === EFFECT_FAKE_GOODS &&
+    typeof card.fakeGoodsDiscardPenalty === "number"
+  ) {
+    return card.value + card.fakeGoodsDiscardPenalty;
+  }
+
   return card.value;
 }
 
@@ -2767,10 +3555,20 @@ function clearRoundCardState(card) {
   delete card.roundStrengthenBonus;
   delete card.roundLeechBonus;
   delete card.roundMenacePenalty;
+  delete card.roundCorrodePenalty;
+  delete card.roundBadReviewCount;
+  delete card.roundFromDiscardPile;
 }
 
 function isBattleTemporaryCard(card) {
-  return !!(card && (card.tempBomb === true || card.tempCopy === true || card.tempPollution === true || card.tempChopsticks === true));
+  return !!(
+    card &&
+    (card.tempBomb === true ||
+      card.tempCopy === true ||
+      card.tempPollution === true ||
+      card.tempChopsticks === true ||
+      card.tempDelivery === true)
+  );
 }
 
 function getOpponent(side) {
@@ -2793,6 +3591,16 @@ function makeTemporaryChopsticksOnePointCard() {
     value: 1,
     displayName: "一分",
     tempChopsticks: true,
+    effectDescription: "临时效果：1 分"
+  });
+}
+
+function makeTemporaryDeliveryOnePointCard() {
+  return cloneCard({
+    type: CARD_SCORE,
+    value: 1,
+    displayName: "一分",
+    tempDelivery: true,
     effectDescription: "临时效果：1 分"
   });
 }
@@ -2820,6 +3628,35 @@ function applyChopsticksEffectFor(side, sourceCard) {
   return true;
 }
 
+function applyDeliveryEffectFor(side, sourceCard) {
+  if (!game || !side || !sourceCard || sourceCard.effect !== EFFECT_DELIVERY) {
+    return false;
+  }
+
+  const target = getOpponent(side);
+  if (!target || isQueueFull(target)) {
+    return false;
+  }
+
+  const slot = firstEmptyQueueSlot(target);
+  if (slot < 0) {
+    return false;
+  }
+
+  const card = makeTemporaryDeliveryOnePointCard();
+  target.queue[slot] = card;
+  activeEffects.push({
+    type: "draw",
+    sideId: target.id,
+    card: card,
+    queueIndex: slot,
+    startedAt: Date.now() + 120
+  });
+  syncRoundScores();
+  side.status = "外卖：对手获得临时 1 分";
+  return true;
+}
+
 function injectPollutionIntoDiscardPile(side) {
   if (!side || !game) {
     return;
@@ -2842,17 +3679,16 @@ function shuffleCardIntoDrawPile(side, card) {
   pile.splice(insertAt, 0, card);
 }
 
-function injectTemporaryBombIntoDrawPile(opponentSide) {
+function injectTemporaryBombIntoDiscardPile(opponentSide) {
   if (!opponentSide || !game) {
     return;
   }
 
-  refillDrawPile(opponentSide);
-  const pile = opponentSide.drawPile;
+  const pile = opponentSide.discardPile;
   const bomb = cloneCard({ type: CARD_BOMB, value: 0, displayName: "临时炸弹", tempBomb: true });
   const insertAt = pile.length === 0 ? 0 : Math.floor(Math.random() * (pile.length + 1));
   pile.splice(insertAt, 0, bomb);
-  showTip("陷阱：对手抽牌堆被塞入临时炸弹", TIPS_DEFAULT_DURATION_MS);
+  showTip("埋伏：对手弃牌堆被塞入临时炸弹", TIPS_DEFAULT_DURATION_MS);
 }
 
 function triggerAmbushOnDiscard(ownerSide, card) {
@@ -2860,7 +3696,7 @@ function triggerAmbushOnDiscard(ownerSide, card) {
     return;
   }
 
-  injectTemporaryBombIntoDrawPile(getOpponent(ownerSide));
+  injectTemporaryBombIntoDiscardPile(getOpponent(ownerSide));
 }
 
 const BRUISER_MAX_DEPTH = 48;
@@ -3071,6 +3907,19 @@ function playerHasValidHookTarget() {
   return game && game.player && !isQueueFull(game.player) && game.player.discardPile && game.player.discardPile.length > 0;
 }
 
+function playerHasValidBadReviewTarget() {
+  if (!game || !game.ai || !game.ai.queue) {
+    return false;
+  }
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = game.ai.queue[i];
+    if (c && c.type === CARD_SCORE) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function hasActiveEffect(card) {
   return card && card.effect && EFFECTS[card.effect] && EFFECTS[card.effect].trigger === "active";
 }
@@ -3128,7 +3977,7 @@ function afterAction() {
     return;
   }
 
-  if (game.player.stopped && game.ai.stopped) {
+  if ((game.player.busted || game.player.stopped) && (game.ai.busted || game.ai.stopped)) {
     settleStoppedRound();
     return;
   }
@@ -3139,27 +3988,27 @@ function afterAction() {
 function advanceTurn() {
   const previousActive = game.active;
 
-  if (game.player.stopped && game.ai.stopped) {
+  if ((game.player.stopped || game.player.busted) && (game.ai.stopped || game.ai.busted)) {
     settleStoppedRound();
     return;
   }
 
   if (previousActive === "player") {
-    if (!game.ai.stopped) {
+    if (!game.ai.stopped && !game.ai.busted) {
       game.active = "ai";
       game.message = "AI 思考中...";
       aiActionAt = Date.now() + AI_DELAY;
-    } else if (!game.player.stopped) {
+    } else if (!game.player.stopped && !game.player.busted) {
       game.active = "player";
       game.message = "你的回合：继续抽，或停手。";
     }
     return;
   }
 
-  if (!game.player.stopped) {
+  if (!game.player.stopped && !game.player.busted) {
     game.active = "player";
     game.message = "你的回合：继续抽，或停手。";
-  } else if (!game.ai.stopped) {
+  } else if (!game.ai.stopped && !game.ai.busted) {
     game.active = "ai";
     game.message = "AI 思考中...";
     aiActionAt = Date.now() + AI_DELAY;
@@ -3315,12 +4164,62 @@ function resolveActiveEffect(useEffect) {
   }
 
   if (card.effect === EFFECT_DEFUSE) {
-    const beforeRefs = snapshotQueueCardRefs(game.player);
     if (applyDefuseEffectFor(game.player, card)) {
-      schedulePlayerActiveEffectsAfterDraw(collectNewQueueCardsSince(game.player, beforeRefs));
+      openNextPlayerPendingActiveModalOrAdvance();
     } else {
       openNextPlayerPendingActiveModalOrAdvance();
     }
+    return;
+  }
+
+  if (card.effect === EFFECT_DETONATE) {
+    applyDetonateEffectFor(game.player, card);
+    openNextPlayerPendingActiveModalOrAdvance();
+    return;
+  }
+
+  if (card.effect === EFFECT_THREATEN) {
+    if (applyThreatenEffectFor(game.player, game.ai)) {
+      game.player.status = "威胁：对手弃牌堆洗回牌库";
+    } else {
+      game.player.status = "威胁无目标";
+    }
+    openNextPlayerPendingActiveModalOrAdvance();
+    return;
+  }
+
+  if (card.effect === EFFECT_SALVAGE) {
+    if (applySalvageEffectFor(game.player)) {
+      game.player.status = "打捞：弃牌堆洗回牌库";
+    } else {
+      game.player.status = "打捞无目标";
+    }
+    openNextPlayerPendingActiveModalOrAdvance();
+    return;
+  }
+
+  if (card.effect === EFFECT_RUSH_ORDER) {
+    const beforeRefs = snapshotQueueCardRefs(game.player);
+    const result = applyRushOrderEffectFor(game.player, card, beforeRefs);
+    if (result.bruiserPending) {
+      return;
+    }
+    schedulePlayerActiveEffectsAfterDraw(collectNewQueueCardsSince(game.player, beforeRefs));
+    return;
+  }
+
+  if (card.effect === EFFECT_BAD_REVIEW) {
+    if (!playerHasValidBadReviewTarget()) {
+      game.player.status = "差评无目标";
+      openNextPlayerPendingActiveModalOrAdvance();
+      return;
+    }
+
+    modal = {
+      type: "selectBadReviewTarget",
+      title: "选择差评目标",
+      card: card
+    };
     return;
   }
 
@@ -3357,14 +4256,14 @@ function resolveActiveEffect(useEffect) {
 
   if (card.effect === EFFECT_SHIELD) {
     if (!playerHasValidShieldTarget(card)) {
-      game.player.status = "回收无目标";
+      game.player.status = "回滚无目标";
       openNextPlayerPendingActiveModalOrAdvance();
       return;
     }
 
     modal = {
       type: "selectShieldTarget",
-      title: "选择回收目标",
+      title: "选择回滚目标",
       card: card
     };
     return;
@@ -3441,17 +4340,74 @@ function resolveAiActiveEffect(card) {
   }
 
   if (card.effect === EFFECT_DEFUSE) {
-    const beforeRefs = snapshotQueueCardRefs(game.ai);
-    const used = applyDefuseEffectFor(game.ai, card);
+    const used = chooseAiUseDefuseNow(card) && applyDefuseEffectFor(game.ai, card);
     if (used) {
       showAiUseTip();
+    } else {
+      game.ai.status = "断点：暂不发动";
     }
-    const chain = collectNewQueueCardsSince(game.ai, beforeRefs).filter(hasActiveEffect);
-    if (chain.length > 0) {
-      pendingAiActiveEffect = {
-        aiEffectChain: chain,
-        resolveAt: Date.now() + DRAW_ANIM_DURATION
-      };
+    return;
+  }
+
+  if (card.effect === EFFECT_DETONATE) {
+    if (chooseAiUseDetonateNow()) {
+      showAiUseTip();
+      applyDetonateEffectFor(game.ai, card);
+    } else {
+      game.ai.status = "自爆：暂不发动";
+    }
+    return;
+  }
+
+  if (card.effect === EFFECT_THREATEN) {
+    if (chooseAiUseThreatenNow() && applyThreatenEffectFor(game.ai, game.player)) {
+      showAiUseTip();
+      game.ai.status = "威胁：你的弃牌堆被洗回牌库";
+    } else {
+      game.ai.status = "威胁：暂不发动";
+    }
+    return;
+  }
+
+  if (card.effect === EFFECT_SALVAGE) {
+    if (chooseAiUseSalvageNow() && applySalvageEffectFor(game.ai)) {
+      showAiUseTip();
+      game.ai.status = "打捞：弃牌堆洗回牌库";
+    } else {
+      game.ai.status = "打捞：暂不发动";
+    }
+    return;
+  }
+
+  if (card.effect === EFFECT_RUSH_ORDER) {
+    if (!chooseAiUseRushOrderNow(card)) {
+      game.ai.status = "抢单：暂不发动";
+      return;
+    }
+    const beforeRefs = snapshotQueueCardRefs(game.ai);
+    const result = applyRushOrderEffectFor(game.ai, card, beforeRefs);
+    if (result.drawn > 0) {
+      showAiUseTip();
+    }
+    if (!result.bruiserPending) {
+      const chain = collectNewQueueCardsSince(game.ai, beforeRefs).filter(hasActiveEffect);
+      if (chain.length > 0) {
+        pendingAiActiveEffect = {
+          aiEffectChain: chain,
+          resolveAt: Date.now() + DRAW_ANIM_DURATION
+        };
+      }
+    }
+    return;
+  }
+
+  if (card.effect === EFFECT_BAD_REVIEW) {
+    const targetIndex = chooseAiBadReviewTargetIndex();
+    if (targetIndex >= 0) {
+      showAiUseTip();
+      applyBadReviewEffectFor(game.ai, game.player, targetIndex);
+    } else {
+      game.ai.status = "差评无目标";
     }
     return;
   }
@@ -3480,7 +4436,7 @@ function resolveAiActiveEffect(card) {
       }
     } else {
       delete game.ai.stopAfterShieldRecycle;
-      game.ai.status = "回收无目标";
+      game.ai.status = "回滚无目标";
     }
     return;
   }
@@ -3648,6 +4604,245 @@ function chooseAiUseInciteNow() {
   return risk + pressure + preset.activeSkillBias >= 0.26 + preset.inciteRiskBias;
 }
 
+function getDrawSourceForDecision(side) {
+  if (!side) {
+    return [];
+  }
+  return side.drawPile && side.drawPile.length > 0 ? side.drawPile : side.discardPile || [];
+}
+
+function countQueuedBombs(side) {
+  if (!side || !side.queue) {
+    return 0;
+  }
+  let bombs = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    if (isBombForFirepower(side.queue[i])) {
+      bombs += 1;
+    }
+  }
+  return bombs;
+}
+
+function isBombForFirepower(card) {
+  return !!(card && (card.type === CARD_BOMB || card.tempBomb === true));
+}
+
+function countQueuedEffect(side, effectKey) {
+  if (!side || !side.queue) {
+    return 0;
+  }
+  let n = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = side.queue[i];
+    if (c && c.type === CARD_SCORE && c.effect === effectKey) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function hasQueuedEffect(side, effectKey) {
+  return countQueuedEffect(side, effectKey) > 0;
+}
+
+function estimateBombPressureValueForAi(aiSide, playerSide) {
+  if (!aiSide || !playerSide) {
+    return 0;
+  }
+  const leakSecretsCount = countQueuedEffect(aiSide, EFFECT_LEAK_SECRETS);
+  const playerBombs = countQueuedBombs(playerSide);
+  const playerBombRisk = estimateBombRisk(playerSide);
+  const lowHpBonus = Math.max(0, 3 - playerSide.hp) * 0.25;
+  return leakSecretsCount * 0.45 + playerBombs * (0.9 + leakSecretsCount * 0.3) + playerBombRisk * (0.65 + lowHpBonus);
+}
+
+function estimateDefuseValueForAi(aiSide, playerSide) {
+  if (!aiSide || !playerSide || isQueueFull(aiSide)) {
+    return -Infinity;
+  }
+  const source = getDrawSourceForDecision(aiSide);
+  if (!source.length) {
+    return -Infinity;
+  }
+
+  let total = 0;
+  const currentMargin = aiSide.roundScore - playerSide.roundScore;
+  const activeCardPenalty = countOccupiedQueueSlots(aiSide) >= QUEUE_LIMIT - 1 ? 0.35 : 0;
+  for (let i = 0; i < source.length; i += 1) {
+    const aiEval = cloneSideForAiEval(aiSide);
+    const playerEval = cloneSideForAiEval(playerSide);
+    const drawn = cloneCard(source[i]);
+
+    if (drawn.type === CARD_BOMB) {
+      total += aiSide.hp <= 1 ? 4.5 : 1.2;
+      continue;
+    }
+
+    const slot = firstEmptyQueueSlot(aiEval);
+    aiEval.queue[slot] = drawn;
+    if (drawn.effect === EFFECT_CHOPSTICKS && !isQueueFull(aiEval)) {
+      const chopsticksSlot = firstEmptyQueueSlot(aiEval);
+      if (chopsticksSlot >= 0) {
+        aiEval.queue[chopsticksSlot] = makeTemporaryChopsticksOnePointCard();
+      }
+    } else if (drawn.effect === EFFECT_DELIVERY && !isQueueFull(playerEval)) {
+      const deliverySlot = firstEmptyQueueSlot(playerEval);
+      if (deliverySlot >= 0) {
+        playerEval.queue[deliverySlot] = makeTemporaryDeliveryOnePointCard();
+      }
+    } else if (drawn.effect === EFFECT_CALM) {
+      aiEval.hp = Math.min(getSideMaxHp(aiEval), aiEval.hp + 1);
+    }
+    applyOpponentDrawPassivesForEval(aiEval, playerEval);
+    aiEval.queue[slot] = null;
+    const aiScore = calculateRoundScoreFor(aiEval, playerEval);
+    const playerScore = calculateRoundScoreFor(playerEval, aiEval);
+    const calmValue = drawn.effect === EFFECT_CALM && aiEval.hp > aiSide.hp ? 0.45 : 0;
+    const baitValue = drawn.effect === EFFECT_BAIT ? 0.35 : 0;
+    total += aiScore + calmValue + baitValue - playerScore - currentMargin - activeCardPenalty;
+  }
+
+  return total / source.length;
+}
+
+function chooseAiUseDefuseNow(card) {
+  const ai = game.ai;
+  const player = game.player;
+  if (!ai || !player || !card || isQueueFull(ai)) {
+    return false;
+  }
+  const source = getDrawSourceForDecision(ai);
+  if (!source.length) {
+    return false;
+  }
+
+  const nextCard = ai.drawPile && ai.drawPile.length > 0 ? ai.drawPile[ai.drawPile.length - 1] : null;
+  const bombRisk = estimateBombRisk(ai);
+  const expectedValue = estimateDefuseValueForAi(ai, player);
+  const mustChase = player.stopped && !player.busted && ai.roundScore <= player.roundScore;
+  const matchPointDanger = player.wins >= getMatchWinTarget() - 1 && ai.wins <= player.wins;
+
+  if (nextCard && nextCard.type === CARD_BOMB) {
+    return true;
+  }
+  if (ai.hp <= 1 && bombRisk > 0) {
+    return true;
+  }
+  if (mustChase || matchPointDanger) {
+    return expectedValue > -0.2 || bombRisk >= 0.16;
+  }
+  if (player.stopped && ai.roundScore > player.roundScore && bombRisk < 0.18) {
+    return expectedValue >= 1.25;
+  }
+  if (countOccupiedQueueSlots(ai) >= QUEUE_LIMIT - 1 && bombRisk < 0.28) {
+    return false;
+  }
+  return bombRisk >= 0.24 || expectedValue >= 0.45;
+}
+
+function chooseAiUseDetonateNow() {
+  if (!game || !game.ai || !game.player || game.ai.busted || game.player.busted) {
+    return false;
+  }
+  const ai = game.ai;
+  const player = game.player;
+  const playerBombPressure = estimateBombPressureValueForAi(ai, player);
+  const playerWillWinRound = player.stopped && player.roundScore >= ai.roundScore;
+  const playerAtMatchPoint = player.wins >= getMatchWinTarget() - 1 && ai.wins <= player.wins;
+
+  if (player.hp <= 1 && ai.hp > 1) {
+    return true;
+  }
+  if (player.hp <= 1 && ai.hp <= 1) {
+    return playerWillWinRound || playerAtMatchPoint;
+  }
+  if (ai.hp <= 1) {
+    return false;
+  }
+  if (player.hp === 2 && ai.hp >= 3) {
+    return playerAtMatchPoint || playerWillWinRound || playerBombPressure >= 1.4;
+  }
+  if (player.hp < ai.hp && ai.roundScore < player.roundScore) {
+    return playerBombPressure >= 0.9;
+  }
+  return false;
+}
+
+function chooseAiUseThreatenNow() {
+  if (!game || !game.ai || !game.player || !game.player.discardPile || game.player.discardPile.length === 0) {
+    return false;
+  }
+
+  const value = estimateThreatenValueForAi(game.ai, game.player);
+  const discard = game.player.discardPile;
+  const bombCount = countCardsByPredicate(discard, function (card) {
+    return card && card.type === CARD_BOMB;
+  });
+  const negativeCount = countCardsByPredicate(discard, function (card) {
+    return card && (card.tempPollution === true || card.negativeCard === true);
+  });
+  const bombRatio = bombCount / Math.max(1, discard.length);
+
+  if (game.player.hp <= 1 && bombCount > 0) {
+    return true;
+  }
+  if (negativeCount >= 2 && value >= 0) {
+    return true;
+  }
+  if (bombRatio >= 0.34 && value >= 0.12) {
+    return true;
+  }
+  return value >= 0.35;
+}
+
+function chooseAiUseRushOrderNow(card) {
+  if (!game || !game.ai || !game.player || !card) {
+    return false;
+  }
+
+  const ai = game.ai;
+  const player = game.player;
+  if (ai.busted || ai.stopped) {
+    return false;
+  }
+
+  const style = normalizeAiStyle(ai.aiStyle);
+  const preset = getAiStylePreset(style);
+  const estimate = estimateRushOrderActiveValueForEval(card, ai, player, style);
+  const mustChase = player.stopped && !player.busted && ai.roundScore <= player.roundScore;
+  const matchPointDanger = player.wins >= getMatchWinTarget() - 1 && ai.wins <= player.wins;
+  const targetScore = player.stopped ? player.roundScore + 1 : Math.max(4, player.roundScore + preset.targetLead);
+  const queueOpen = QUEUE_LIMIT - countOccupiedQueueSlots(ai);
+  const source = getDrawSourceForDecision(ai);
+
+  if (source.length === 0 || queueOpen <= 0) {
+    return estimate.aiScoreDelta > 0 && (mustChase || ai.roundScore < targetScore);
+  }
+
+  if (ai.hp <= 1 && estimate.bombRisk > 0) {
+    return (mustChase || matchPointDanger) && estimate.marginDelta >= 2.5 && estimate.bombRisk <= 0.2;
+  }
+
+  if (queueOpen <= 1 && estimate.bombRisk > 0.18) {
+    return false;
+  }
+
+  if (player.stopped && ai.roundScore > player.roundScore) {
+    return estimate.marginDelta >= 2.4 && estimate.bombRisk <= (ai.hp >= 3 ? 0.32 : 0.18);
+  }
+
+  if (mustChase || matchPointDanger) {
+    return estimate.marginDelta >= -0.2 && estimate.bombRisk <= (ai.hp >= 3 ? 0.62 : 0.38);
+  }
+
+  if (ai.roundScore >= targetScore && estimate.marginDelta < 2.2) {
+    return false;
+  }
+
+  return estimate.marginDelta >= 0.8 + preset.stopMargin && estimate.bombRisk <= (ai.hp >= 3 ? 0.52 : 0.3);
+}
+
 function applyShieldEffectFor(user, shieldCard, targetIndex) {
   if (!user || !shieldCard || !game) {
     return false;
@@ -3668,7 +4863,7 @@ function applyShieldEffectFor(user, shieldCard, targetIndex) {
   clearRoundCardState(target);
   shuffleCardIntoDrawPile(user, target);
   syncRoundScores();
-  user.status = "回收：已将一张牌洗回抽牌堆";
+  user.status = "回滚：已将一张牌洗回抽牌堆";
   return true;
 }
 
@@ -3869,11 +5064,13 @@ function applyCopyEffect(targetIndex) {
   }
 
   const dup = makeTemporaryCopy(target);
-  if (!placeCopyDuplicateInQueue(game.player, copyIdx, dup)) {
+  const placedIndex = placeCopyDuplicateInQueue(game.player, copyIdx, dup);
+  if (placedIndex < 0) {
     showTip("队列已满");
     openNextPlayerPendingActiveModalOrAdvance();
     return;
   }
+  triggerSlotMoveEffect(game.player, game.player, dup, targetIndex, placedIndex);
   syncRoundScores();
   game.player.status = "复制！获得临时复制";
   if (hasActiveEffect(dup)) {
@@ -3899,9 +5096,11 @@ function applyCopyEffectForAi(ai, copyCard, targetIndex) {
   }
 
   const dup = makeTemporaryCopy(target);
-  if (!placeCopyDuplicateInQueue(ai, copyIdx, dup)) {
+  const placedIndex = placeCopyDuplicateInQueue(ai, copyIdx, dup);
+  if (placedIndex < 0) {
     return false;
   }
+  triggerSlotMoveEffect(ai, ai, dup, targetIndex, placedIndex);
   syncRoundScores();
   ai.status = "复制！获得临时复制";
   if (hasActiveEffect(dup)) {
@@ -3986,10 +5185,101 @@ function applyStrengthenEffectFor(user, strengthenCard, targetIndex) {
     return false;
   }
 
-  target.roundBlessBonus = (typeof target.roundBlessBonus === "number" ? target.roundBlessBonus : 0) + 2;
+  target.roundStrengthenBonus = (typeof target.roundStrengthenBonus === "number" ? target.roundStrengthenBonus : 0) + 2;
   syncRoundScores();
   user.status = "强化：目标 +2";
   return true;
+}
+
+function applyRushOrderEffectFor(user, sourceCard, queueBeforeRefs) {
+  const result = { drawn: 0, bruiserPending: false };
+  if (!game || scene !== "playing" || !user || !sourceCard) {
+    return result;
+  }
+
+  const sourceIndex = user.queue.indexOf(sourceCard);
+  if (sourceIndex < 0) {
+    user.status = "抢单无目标";
+    return result;
+  }
+
+  for (let i = 0; i < 2; i += 1) {
+    if (user.busted || user.stopped || isQueueFull(user)) {
+      break;
+    }
+    refillDrawPile(user);
+    if (user.drawPile.length === 0 && user.discardPile.length === 0) {
+      break;
+    }
+    const drawn = drawCard(user);
+    if (!drawn) {
+      break;
+    }
+    result.drawn += 1;
+    triggerDrawEffect(user, drawn);
+    if (startBruiserDrawSchedule(user, drawn, 0, user.id === "player" ? "player" : "ai", queueBeforeRefs)) {
+      result.bruiserPending = true;
+      break;
+    }
+  }
+
+  sourceCard.roundStrengthenBonus = (typeof sourceCard.roundStrengthenBonus === "number" ? sourceCard.roundStrengthenBonus : 0) + 2;
+  syncRoundScores();
+  user.status = result.drawn > 0 ? "抢单：再抽 " + result.drawn + " 张，自身 +2" : "抢单：无牌可抽，自身 +2";
+  return result;
+}
+
+function applyBadReviewEffect(targetIndex) {
+  modal = null;
+  modalStack = [];
+  applyBadReviewEffectFor(game.player, game.ai, targetIndex);
+  openNextPlayerPendingActiveModalOrAdvance();
+}
+
+function applyBadReviewEffectFor(user, target, targetIndex) {
+  if (!user || !target || !game) {
+    return false;
+  }
+
+  const card = targetIndex >= 0 && targetIndex < QUEUE_LIMIT ? target.queue[targetIndex] : null;
+  if (!card || card.type !== CARD_SCORE) {
+    user.status = "差评无目标";
+    return false;
+  }
+
+  card.roundBadReviewCount = (typeof card.roundBadReviewCount === "number" ? card.roundBadReviewCount : 0) + 1;
+  syncRoundScores();
+  user.status = "差评：目标分数减半";
+  return true;
+}
+
+function chooseAiBadReviewTargetIndex() {
+  if (!game || !game.player || !game.player.queue) {
+    return -1;
+  }
+
+  let bestIndex = -1;
+  let bestLoss = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = game.player.queue[i];
+    if (!c || c.type !== CARD_SCORE) {
+      continue;
+    }
+    const before = calculateCardRoundContributionFor(game.player, game.ai, c, i);
+    c.roundBadReviewCount = (typeof c.roundBadReviewCount === "number" ? c.roundBadReviewCount : 0) + 1;
+    const after = calculateCardRoundContributionFor(game.player, game.ai, c, i);
+    c.roundBadReviewCount -= 1;
+    if (c.roundBadReviewCount <= 0) {
+      delete c.roundBadReviewCount;
+    }
+    const loss = before - after;
+    if (loss > bestLoss) {
+      bestLoss = loss;
+      bestIndex = i;
+    }
+  }
+  syncRoundScores();
+  return bestIndex;
 }
 
 function chooseAiStrengthenTargetIndex(strengthenCard) {
@@ -4000,19 +5290,38 @@ function chooseAiStrengthenTargetIndex(strengthenCard) {
   }
 
   let bestIndex = -1;
-  let bestValue = -Infinity;
+  let bestGain = -Infinity;
   for (let i = 0; i < QUEUE_LIMIT; i += 1) {
     const c = q[i];
     if (i === sourceIndex || !c || c.type !== CARD_SCORE) {
       continue;
     }
-    const value = calculateCardRoundContribution(game.ai, c, i);
-    if (value > bestValue) {
-      bestValue = value;
+    const gain = estimateStrengthenBonusGain(game.ai, game.player, c, i, 2);
+    if (gain > bestGain) {
+      bestGain = gain;
       bestIndex = i;
     }
   }
   return bestIndex;
+}
+
+function estimateStrengthenBonusGain(side, opponent, targetCard, targetIndex, bonus) {
+  if (!side || !targetCard || targetCard.type !== CARD_SCORE) {
+    return 0;
+  }
+
+  const before = calculateCardRoundContributionFor(side, opponent, targetCard, targetIndex);
+  const oldBonus = targetCard.roundStrengthenBonus;
+  targetCard.roundStrengthenBonus = (typeof oldBonus === "number" ? oldBonus : 0) + bonus;
+  const after = calculateCardRoundContributionFor(side, opponent, targetCard, targetIndex);
+
+  if (typeof oldBonus === "number") {
+    targetCard.roundStrengthenBonus = oldBonus;
+  } else {
+    delete targetCard.roundStrengthenBonus;
+  }
+
+  return after - before;
 }
 
 function openHookTargetModal(hookCard) {
@@ -4063,6 +5372,7 @@ function applyHookEffectFor(user, discardIndex) {
   }
 
   user.queue[slot] = card;
+  card.roundFromDiscardPile = true;
   triggerDrawEffect(user, card);
   triggerNimbleCardsAfterDraw(user, card);
   notifyOpponentQueuedCardsAfterDraw(user);
@@ -4079,8 +5389,7 @@ function chooseAiHookTargetIndex() {
   let bestIndex = -1;
   let bestValue = -Infinity;
   for (let i = 0; i < game.ai.discardPile.length; i += 1) {
-    const c = game.ai.discardPile[i];
-    const value = c.type === CARD_BOMB ? -100 : getAiStealTargetValue(c);
+    const value = getAiHookTargetValue(game.ai, i);
     if (value > bestValue) {
       bestValue = value;
       bestIndex = i;
@@ -4089,19 +5398,96 @@ function chooseAiHookTargetIndex() {
   return bestValue > -100 ? bestIndex : -1;
 }
 
+function countCardsByPredicate(cards, predicate) {
+  if (!cards || !cards.length || typeof predicate !== "function") {
+    return 0;
+  }
+  let n = 0;
+  for (let i = 0; i < cards.length; i += 1) {
+    if (predicate(cards[i])) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+function cardIsBait(card) {
+  return !!(card && card.effect === EFFECT_BAIT);
+}
+
+function cardIsNonBombScore(card) {
+  return !!(card && card.type === CARD_SCORE);
+}
+
+function sideHasFishingEngine(side) {
+  if (!side) {
+    return false;
+  }
+  const piles = [side.drawPile || [], side.discardPile || [], side.queue || []];
+  for (let p = 0; p < piles.length; p += 1) {
+    const cards = piles[p];
+    for (let i = 0; i < cards.length; i += 1) {
+      const c = cards[i];
+      if (c && (c.effect === EFFECT_HOOK || c.effect === EFFECT_BAIT || c.effect === EFFECT_SALVAGE || c.effect === EFFECT_BIG_FISH)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function getAiHookTargetValue(side, discardIndex, opponentOverride) {
+  if (!side || !side.discardPile || discardIndex < 0 || discardIndex >= side.discardPile.length) {
+    return -Infinity;
+  }
+  const c = side.discardPile[discardIndex];
+  if (!c || c.type === CARD_BOMB) {
+    return -100;
+  }
+  const slot = firstEmptyQueueSlot(side);
+  const opponent = opponentOverride || getOpponent(side);
+  const oldFromDiscard = c.roundFromDiscardPile;
+  c.roundFromDiscardPile = true;
+  const value = calculateCardRoundContributionFor(side, opponent, c, slot >= 0 ? slot : QUEUE_LIMIT - 1);
+  if (oldFromDiscard === true) {
+    c.roundFromDiscardPile = true;
+  } else {
+    delete c.roundFromDiscardPile;
+  }
+  const canEstimateFollowupActive =
+    c.effect !== EFFECT_HOOK && c.effect !== EFFECT_SALVAGE && c.effect !== EFFECT_DEFUSE;
+  const activeValue =
+    canEstimateFollowupActive && hasActiveEffect(c)
+      ? estimateAiActiveEffectSwingForEval(c, side, opponent, side.aiStyle) * 0.65
+      : 0;
+  const baitCycleValue = c.effect === EFFECT_BAIT ? 1.35 + Math.min(1.0, (c.baitDiscardBonus || 0) * 0.18) : 0;
+  return value + activeValue + baitCycleValue;
+}
+
+function getBestAiHookTargetValue(side, opponentOverride) {
+  if (!side || !side.discardPile || !side.discardPile.length) {
+    return -Infinity;
+  }
+  let best = -Infinity;
+  for (let i = 0; i < side.discardPile.length; i += 1) {
+    best = Math.max(best, getAiHookTargetValue(side, i, opponentOverride));
+  }
+  return best;
+}
+
 function applyDefuseEffectFor(user, sourceCard) {
   if (!user || !game || !sourceCard) {
     return false;
   }
 
   if (isQueueFull(user)) {
-    user.status = "拆弹：队列已满";
+    user.status = "断点：队列已满";
     return false;
   }
 
   refillDrawPile(user);
   if (user.drawPile.length === 0 && user.discardPile.length === 0) {
-    user.status = "拆弹：无牌可抽";
+    user.status = "断点：无牌可抽";
     return false;
   }
 
@@ -4110,9 +5496,9 @@ function applyDefuseEffectFor(user, sourceCard) {
   user.queue[slot] = card;
 
   if (card.type === CARD_BOMB) {
-    user.status = "拆弹：炸弹已弃置";
-    discardQueuedCard(user, card, slot, 0);
-    user.queue[slot] = null;
+    user.status = "断点：炸弹已弃置";
+    triggerDrawEffect(user, card, { suppressBomb: true });
+    discardQueuedCard(user, card, slot, 0, true, DRAW_ANIM_DURATION);
     syncRoundScores();
     return true;
   }
@@ -4121,7 +5507,104 @@ function applyDefuseEffectFor(user, sourceCard) {
   notifyOpponentQueuedCardsAfterDraw(user);
   triggerNimbleCardsAfterDraw(user, card);
   triggerDrawEffect(user, card);
-  user.status = "拆弹：抽到一张安全牌";
+  discardQueuedCard(user, card, slot, 0, true, DRAW_ANIM_DURATION);
+  user.status = "断点：抽到一张牌并弃置";
+  return true;
+}
+
+function markSideBustedByThreshold(side) {
+  if (!side || side.hp > 0) {
+    return;
+  }
+  side.hp = 0;
+  side.busted = true;
+  side.stopped = true;
+  side.status = "淘汰";
+}
+
+function applyThresholdDamage(side, amount, label) {
+  if (!side || side.busted || amount <= 0) {
+    return false;
+  }
+  side.hp = Math.max(0, side.hp - amount);
+  side.status = label ? label + "：阈值 -" + amount : "阈值 -" + amount;
+  markSideBustedByThreshold(side);
+  return true;
+}
+
+function applyDetonateEffectFor(user, sourceCard) {
+  if (!user || !game || !sourceCard) {
+    return false;
+  }
+
+  const target = getOpponent(user);
+  applyThresholdDamage(user, 1, "自爆");
+  applyThresholdDamage(target, 1, "自爆");
+  if (!user.busted) {
+    user.status = "自爆：双方阈值 -1";
+  }
+  if (target && !target.busted) {
+    target.status = "自爆：双方阈值 -1";
+  }
+  return true;
+}
+
+function applyThreatenEffectFor(user, target) {
+  if (!user || !target || !target.discardPile || target.discardPile.length === 0) {
+    return false;
+  }
+  target.drawPile = shuffle(target.discardPile).concat(target.drawPile || []);
+  target.discardPile = [];
+  return true;
+}
+
+function applySalvageEffectFor(user) {
+  if (!user || !user.discardPile || user.discardPile.length === 0) {
+    return false;
+  }
+  user.drawPile = shuffle(user.discardPile).concat(user.drawPile || []);
+  user.discardPile = [];
+  return true;
+}
+
+function chooseAiUseSalvageNow() {
+  if (!game || !game.ai || !game.ai.discardPile || game.ai.discardPile.length === 0) {
+    return false;
+  }
+  const discard = game.ai.discardPile;
+  const bombCount = countCardsByPredicate(discard, function (card) {
+    return card && card.type === CARD_BOMB;
+  });
+  const scoreCount = countCardsByPredicate(discard, cardIsNonBombScore);
+  const baitCount = countCardsByPredicate(discard, cardIsBait);
+  const bombRatio = bombCount / Math.max(1, discard.length);
+  const hasCleanQualityPile = bombRatio <= 0.25 && (scoreCount >= 3 || baitCount >= 1);
+
+  if (game.ai.drawPile && game.ai.drawPile.length <= 2) {
+    return bombRatio <= 0.45 || baitCount > 0 || scoreCount >= 3;
+  }
+
+  if (hasCleanQualityPile && discard.length >= 3) {
+    return true;
+  }
+
+  return getBestAiHookTargetValue(game.ai) < 2 && discard.length >= 4 && bombRatio <= 0.34;
+}
+
+function applyCalmEffectFor(side) {
+  if (!side || side.busted) {
+    return false;
+  }
+  const prevHp = side.hp;
+  side.hp = Math.min(getSideMaxHp(side), side.hp + 1);
+  if (side.hp <= prevHp) {
+    return false;
+  }
+  hpRecoverPulse[side.id] = {
+    slotIndex: side.hp - 1,
+    startedAt: Date.now()
+  };
+  side.status = "冷静：阈值 +1";
   return true;
 }
 
@@ -4274,6 +5757,123 @@ function applyOpponentDrawPassivesForEval(drawingSide, opponentSide) {
   }
 }
 
+function removeCardFromEvalDrawSource(side, sourceIndex) {
+  if (!side || sourceIndex < 0) {
+    return null;
+  }
+  const pile = side.drawPile && side.drawPile.length > 0 ? side.drawPile : side.discardPile || [];
+  if (sourceIndex >= pile.length) {
+    return null;
+  }
+  return pile.splice(sourceIndex, 1)[0] || null;
+}
+
+function applyEvalDrawCardEffects(drawingSide, opponentSide, drawn) {
+  if (!drawingSide || !opponentSide || !drawn) {
+    return;
+  }
+
+  const slot = firstEmptyQueueSlot(drawingSide);
+  if (slot < 0) {
+    drawingSide.stopped = true;
+    return;
+  }
+
+  drawingSide.queue[slot] = drawn;
+  if (drawn.type === CARD_BOMB) {
+    const gunpowderCount = countQueuedEffect(drawingSide, EFFECT_GUNPOWDER);
+    drawingSide.hp = Math.max(0, drawingSide.hp - (1 + gunpowderCount));
+    drawingSide.busted = drawingSide.hp === 0;
+    drawingSide.stopped = drawingSide.busted;
+    return;
+  }
+
+  if (drawn.effect === EFFECT_CHOPSTICKS && !isQueueFull(drawingSide)) {
+    const chopsticksSlot = firstEmptyQueueSlot(drawingSide);
+    if (chopsticksSlot >= 0) {
+      drawingSide.queue[chopsticksSlot] = makeTemporaryChopsticksOnePointCard();
+    }
+  } else if (drawn.effect === EFFECT_DELIVERY && !isQueueFull(opponentSide)) {
+    const deliverySlot = firstEmptyQueueSlot(opponentSide);
+    if (deliverySlot >= 0) {
+      opponentSide.queue[deliverySlot] = makeTemporaryDeliveryOnePointCard();
+    }
+  } else if (drawn.effect === EFFECT_CALM) {
+    drawingSide.hp = Math.min(getSideMaxHp(drawingSide), drawingSide.hp + 1);
+  }
+
+  applyOpponentDrawPassivesForEval(drawingSide, opponentSide);
+}
+
+function estimateAiForcedDrawsForEval(aiSide, playerSide, style, count, depth) {
+  if (!aiSide || !playerSide || count <= 0 || depth > 3 || aiSide.busted || isQueueFull(aiSide)) {
+    return { marginDelta: 0, aiScoreDelta: 0, bombRisk: 0 };
+  }
+
+  const source = getAiEvalDrawSource(aiSide);
+  if (!source.length) {
+    return { marginDelta: 0, aiScoreDelta: 0, bombRisk: 0 };
+  }
+
+  const baseAiScore = calculateRoundScoreFor(aiSide, playerSide);
+  const basePlayerScore = calculateRoundScoreFor(playerSide, aiSide);
+  let marginDeltaTotal = 0;
+  let aiScoreDeltaTotal = 0;
+  let bombRiskTotal = 0;
+
+  for (let i = 0; i < source.length; i += 1) {
+    const aiEval = cloneSideForAiEval(aiSide);
+    const playerEval = cloneSideForAiEval(playerSide);
+    const drawn = removeCardFromEvalDrawSource(aiEval, i);
+    if (!drawn) {
+      continue;
+    }
+
+    applyEvalDrawCardEffects(aiEval, playerEval, drawn);
+
+    let activeSwing = 0;
+    let bombPlanValue = 0;
+    let fishingPlanValue = 0;
+    let extraValue = { marginDelta: 0, aiScoreDelta: 0, bombRisk: 0 };
+    if (drawn.type === CARD_SCORE && !aiEval.busted) {
+      activeSwing = estimateAiActiveEffectSwingForEval(drawn, aiEval, playerEval, style);
+      bombPlanValue = estimateBombPlanPassiveValueForAi(drawn, aiEval, playerEval);
+      fishingPlanValue =
+        drawn.effect === EFFECT_BAIT
+          ? 1.05 + Math.min(0.8, (drawn.baitDiscardBonus || 0) * 0.12)
+          : 0;
+      if (drawn.effect === EFFECT_BRUISER) {
+        extraValue = estimateAiForcedDrawsForEval(aiEval, playerEval, style, 2, depth + 1);
+      }
+    }
+
+    const aiScore = calculateRoundScoreFor(aiEval, playerEval);
+    const playerScore = calculateRoundScoreFor(playerEval, aiEval);
+    marginDeltaTotal +=
+      aiScore +
+      activeSwing +
+      bombPlanValue +
+      fishingPlanValue -
+      playerScore -
+      (baseAiScore - basePlayerScore) +
+      extraValue.marginDelta;
+    aiScoreDeltaTotal +=
+      aiScore -
+      baseAiScore +
+      activeSwing +
+      bombPlanValue +
+      fishingPlanValue +
+      extraValue.aiScoreDelta;
+    bombRiskTotal += (drawn.type === CARD_BOMB ? 1 : 0) + extraValue.bombRisk;
+  }
+
+  return {
+    marginDelta: marginDeltaTotal / source.length,
+    aiScoreDelta: aiScoreDeltaTotal / source.length,
+    bombRisk: clamp(bombRiskTotal / source.length, 0, 1)
+  };
+}
+
 function getAverageQueueContribution(side, opponent, count) {
   const vals = [];
   for (let i = 0; i < QUEUE_LIMIT; i += 1) {
@@ -4339,6 +5939,38 @@ function estimateAiActiveEffectSwingForEval(card, aiSide, playerSide, style) {
     return best;
   }
 
+  if (card.effect === EFFECT_STRENGTHEN) {
+    for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+      const c = aiSide.queue[i];
+      if (!c || c === card || c.type !== CARD_SCORE) {
+        continue;
+      }
+      best = Math.max(best, estimateStrengthenBonusGain(aiSide, playerSide, c, i, 2));
+    }
+    return best;
+  }
+
+  if (card.effect === EFFECT_HOOK && aiOpen) {
+    return Math.max(0, getBestAiHookTargetValue(aiSide, playerSide));
+  }
+
+  if (card.effect === EFFECT_SALVAGE) {
+    if (!aiSide.discardPile || aiSide.discardPile.length === 0) {
+      return -0.2;
+    }
+    const hookValue = getBestAiHookTargetValue(aiSide, playerSide);
+    const lowDeckValue = aiSide.drawPile && aiSide.drawPile.length <= 2 ? 0.55 : 0;
+    return hookValue >= 3 ? -0.15 : 0.25 + lowDeckValue + Math.min(0.6, aiSide.discardPile.length * 0.08);
+  }
+
+  if (card.effect === EFFECT_RUSH_ORDER) {
+    return estimateRushOrderActiveValueForEval(card, aiSide, playerSide, style).marginDelta;
+  }
+
+  if (card.effect === EFFECT_BAD_REVIEW) {
+    return estimateBestBadReviewLossForEval(playerSide, aiSide);
+  }
+
   if (card.effect === EFFECT_INTIMIDATE) {
     return getAverageQueueContribution(playerSide, aiSide, 1) * 0.9;
   }
@@ -4373,6 +6005,121 @@ function estimateAiActiveEffectSwingForEval(card, aiSide, playerSide, style) {
     return risk * 2.2 + scorePressure - 0.4;
   }
 
+  if (card.effect === EFFECT_DEFUSE) {
+    return Math.max(-0.4, estimateDefuseValueForAi(aiSide, playerSide));
+  }
+
+  if (card.effect === EFFECT_DETONATE) {
+    if (playerSide.hp <= 1 && aiSide.hp > 1) {
+      return 6;
+    }
+    if (playerSide.hp <= 1 && aiSide.hp <= 1) {
+      return playerSide.roundScore >= aiSide.roundScore ? 1.4 : -2;
+    }
+    if (aiSide.hp <= 1) {
+      return -5;
+    }
+    return playerSide.hp === 2 && aiSide.hp >= 3 ? 0.6 + estimateBombPressureValueForAi(aiSide, playerSide) : -0.25;
+  }
+
+  if (card.effect === EFFECT_THREATEN) {
+    return estimateThreatenValueForAi(aiSide, playerSide);
+  }
+
+  return 0;
+}
+
+function estimateBestBadReviewLossForEval(targetSide, userSide) {
+  if (!targetSide || !targetSide.queue) {
+    return 0;
+  }
+
+  let bestLoss = 0;
+  for (let i = 0; i < QUEUE_LIMIT; i += 1) {
+    const c = targetSide.queue[i];
+    if (!c || c.type !== CARD_SCORE) {
+      continue;
+    }
+    const before = calculateCardRoundContributionFor(targetSide, userSide, c, i);
+    c.roundBadReviewCount = (typeof c.roundBadReviewCount === "number" ? c.roundBadReviewCount : 0) + 1;
+    const after = calculateCardRoundContributionFor(targetSide, userSide, c, i);
+    c.roundBadReviewCount -= 1;
+    if (c.roundBadReviewCount <= 0) {
+      delete c.roundBadReviewCount;
+    }
+    bestLoss = Math.max(bestLoss, before - after);
+  }
+  return bestLoss;
+}
+
+function estimateRushOrderActiveValueForEval(card, aiSide, playerSide, style) {
+  if (!card || !aiSide || !playerSide || card.type !== CARD_SCORE) {
+    return { marginDelta: 0, aiScoreDelta: 0, bombRisk: 1 };
+  }
+
+  const aiEval = cloneSideForAiEval(aiSide);
+  const playerEval = cloneSideForAiEval(playerSide);
+  const sourceIndex = aiSide.queue ? aiSide.queue.indexOf(card) : -1;
+  const evalCard = sourceIndex >= 0 ? aiEval.queue[sourceIndex] : null;
+  const bonusGain = evalCard ? estimateStrengthenBonusGain(aiEval, playerEval, evalCard, sourceIndex, 2) : 2;
+  if (evalCard) {
+    evalCard.roundStrengthenBonus = (typeof evalCard.roundStrengthenBonus === "number" ? evalCard.roundStrengthenBonus : 0) + 2;
+  }
+
+  const forced = estimateAiForcedDrawsForEval(aiEval, playerEval, style, 2, 0);
+  return {
+    marginDelta: bonusGain + forced.marginDelta,
+    aiScoreDelta: bonusGain + forced.aiScoreDelta,
+    bombRisk: forced.bombRisk
+  };
+}
+
+function estimateDiscardPileThreatValueForTarget(targetSide, opponentSide) {
+  if (!targetSide || !targetSide.discardPile || targetSide.discardPile.length === 0) {
+    return -0.1;
+  }
+
+  let value = 0;
+  for (let i = 0; i < targetSide.discardPile.length; i += 1) {
+    const c = targetSide.discardPile[i];
+    if (!c) {
+      continue;
+    }
+    if (c.type === CARD_BOMB) {
+      value += targetSide.hp <= 1 ? 2.8 : 1.6;
+      continue;
+    }
+    if (c.tempPollution === true || c.negativeCard === true) {
+      value += 0.9;
+      continue;
+    }
+    if (c.type === CARD_SCORE) {
+      value -= Math.max(0, calculateCardRoundContributionFor(targetSide, opponentSide, c, QUEUE_LIMIT - 1)) * 0.22;
+      if (c.effect === EFFECT_LOCKDOWN || c.effect === EFFECT_CORRODE || c.effect === EFFECT_GUNPOWDER) {
+        value += 0.8;
+      }
+    }
+  }
+
+  return value / Math.max(1, targetSide.discardPile.length);
+}
+
+function estimateThreatenValueForAi(aiSide, playerSide) {
+  return estimateDiscardPileThreatValueForTarget(playerSide, aiSide);
+}
+
+function estimateBombPlanPassiveValueForAi(card, aiSide, playerSide) {
+  if (!card || !aiSide || !playerSide || card.type !== CARD_SCORE) {
+    return 0;
+  }
+  if (card.effect === EFFECT_AMBUSH) {
+    const fireSupport = hasQueuedEffect(aiSide, EFFECT_LEAK_SECRETS) ? 0.45 : 0;
+    const lowHpPressure = playerSide.hp <= 1 ? 0.45 : playerSide.hp === 2 ? 0.2 : 0;
+    return 0.65 + fireSupport + lowHpPressure;
+  }
+  if (card.effect === EFFECT_LEAK_SECRETS) {
+    return countQueuedBombs(playerSide) * 0.35 + estimateBombRisk(playerSide) * 0.55;
+  }
   return 0;
 }
 
@@ -4385,42 +6132,70 @@ function estimateAiDrawOutcome(side, opponent, style) {
   let marginDeltaTotal = 0;
   let aiScoreDeltaTotal = 0;
   let bombs = 0;
+  let forcedBombRiskTotal = 0;
   const currentMargin = side.roundScore - opponent.roundScore;
 
   for (let i = 0; i < source.length; i += 1) {
     const aiEval = cloneSideForAiEval(side);
     const playerEval = cloneSideForAiEval(opponent);
-    const drawn = cloneCard(source[i]);
-    const slot = firstEmptyQueueSlot(aiEval);
-    aiEval.queue[slot] = drawn;
+    const drawn = removeCardFromEvalDrawSource(aiEval, i);
+    if (!drawn) {
+      continue;
+    }
+    applyEvalDrawCardEffects(aiEval, playerEval, drawn);
     if (drawn.type === CARD_BOMB) {
       bombs += 1;
-      aiEval.hp = Math.max(0, aiEval.hp - 1);
-      aiEval.busted = aiEval.hp === 0;
-    } else if (drawn.effect === EFFECT_CHOPSTICKS && !isQueueFull(aiEval)) {
-      const chopsticksSlot = firstEmptyQueueSlot(aiEval);
-      if (chopsticksSlot >= 0) {
-        aiEval.queue[chopsticksSlot] = makeTemporaryChopsticksOnePointCard();
-      }
     }
-    applyOpponentDrawPassivesForEval(aiEval, playerEval);
     const aiScore = calculateRoundScoreFor(aiEval, playerEval);
     const playerScore = calculateRoundScoreFor(playerEval, aiEval);
-    const activeSwing = drawn.type === CARD_SCORE ? estimateAiActiveEffectSwingForEval(drawn, aiEval, playerEval, style) : 0;
-    const marginDelta = aiScore + activeSwing - playerScore - currentMargin;
+    const activeSwing = drawn.type === CARD_SCORE && !aiEval.busted ? estimateAiActiveEffectSwingForEval(drawn, aiEval, playerEval, style) : 0;
+    const bombPlanValue = !aiEval.busted ? estimateBombPlanPassiveValueForAi(drawn, aiEval, playerEval) : 0;
+    const fishingPlanValue =
+      drawn.type === CARD_SCORE && !aiEval.busted && drawn.effect === EFFECT_BAIT
+        ? 1.05 + Math.min(0.8, (drawn.baitDiscardBonus || 0) * 0.12)
+        : 0;
+    const forcedValue =
+      drawn.type === CARD_SCORE && !aiEval.busted && drawn.effect === EFFECT_BRUISER
+        ? estimateAiForcedDrawsForEval(aiEval, playerEval, style, 2, 0)
+        : { marginDelta: 0, aiScoreDelta: 0, bombRisk: 0 };
+    forcedBombRiskTotal += forcedValue.bombRisk;
+    const marginDelta = aiScore + activeSwing + bombPlanValue + fishingPlanValue - playerScore - currentMargin + forcedValue.marginDelta;
     marginDeltaTotal += marginDelta;
-    aiScoreDeltaTotal += aiScore - side.roundScore + activeSwing;
+    aiScoreDeltaTotal += aiScore - side.roundScore + activeSwing + bombPlanValue + fishingPlanValue + forcedValue.aiScoreDelta;
   }
 
   return {
     expectedMarginDelta: marginDeltaTotal / source.length,
     expectedAiScoreDelta: aiScoreDeltaTotal / source.length,
-    bombRisk: bombs / source.length
+    bombRisk: clamp((bombs + forcedBombRiskTotal) / source.length, 0, 1)
   };
 }
 
+function shouldAiKeepFishing(ai, player, drawOutcome, bombRisk) {
+  if (!sideHasFishingEngine(ai) || !ai || !player || ai.hp <= 1 || isQueueFull(ai)) {
+    return false;
+  }
+  const occupied = countOccupiedQueueSlots(ai);
+  const discard = ai.discardPile || [];
+  const baitInSystem =
+    countCardsByPredicate(discard, cardIsBait) +
+    countCardsByPredicate(ai.drawPile || [], cardIsBait) +
+    countCardsByPredicate(ai.queue || [], cardIsBait);
+  const safeRiskLimit = ai.hp >= 3 ? 0.46 : 0.28;
+  if (bombRisk > safeRiskLimit) {
+    return false;
+  }
+  if (occupied >= QUEUE_LIMIT - 2) {
+    return false;
+  }
+  if (player.stopped && ai.roundScore > player.roundScore + 4) {
+    return false;
+  }
+  return baitInSystem > 0 || drawOutcome.expectedAiScoreDelta > -0.35 || discard.length >= 3;
+}
+
 function shouldAiUseFreeRecoveryToThinBomb(ai, player, nextCard) {
-  if (!ai || !player || !nextCard || nextCard.type !== CARD_BOMB || ai.hp !== MAX_HP) {
+  if (!ai || !player || !nextCard || nextCard.type !== CARD_BOMB || ai.hp !== getSideMaxHp(ai)) {
     return false;
   }
 
@@ -4457,10 +6232,6 @@ function shouldAiDraw() {
     return false;
   }
 
-  if (game.player.busted) {
-    return false;
-  }
-
   const style = normalizeAiStyle(ai.aiStyle);
   const preset = getAiStylePreset(style);
   const drawOutcome = estimateAiDrawOutcome(ai, player, style);
@@ -4470,13 +6241,18 @@ function shouldAiDraw() {
   const queuePressure = countOccupiedQueueSlots(ai) / QUEUE_LIMIT;
   const expectedGain = drawOutcome.expectedAiScoreDelta;
   const hasHpBuffer = ai.hp > 1;
-  const hasFreeRecovery = ai.hp === MAX_HP;
+  const hasFreeRecovery = ai.hp === getSideMaxHp(ai);
   const targetScore = player.stopped ? player.roundScore + 1 : Math.max(4, player.roundScore + preset.targetLead);
   const nextCard = ai.drawPile.length > 0 ? ai.drawPile[ai.drawPile.length - 1] : null;
   const mustChaseStoppedPlayer = player.stopped && ai.roundScore <= player.roundScore;
   const bombUnlocksDiscardPile = nextCard && nextCard.type === CARD_BOMB && ai.drawPile.length === 1 && ai.discardPile.length > 0;
+  const keepFishing = shouldAiKeepFishing(ai, player, drawOutcome, bombRisk);
 
   if (shouldAiUseFreeRecoveryToThinBomb(ai, player, nextCard)) {
+    return true;
+  }
+
+  if (keepFishing) {
     return true;
   }
 
@@ -4706,9 +6482,9 @@ function moveQueue(side, startOrder, deferDiscard) {
   return order;
 }
 
-function discardQueuedCard(side, card, queueIndex, animationOrder, deferQueueCommit) {
+function discardQueuedCard(side, card, queueIndex, animationOrder, deferQueueCommit, delayMs) {
   const returnSide = card.returnToSideId && game[card.returnToSideId] ? game[card.returnToSideId] : side;
-  triggerDiscardEffect(side, returnSide, card, queueIndex, animationOrder || 0, deferQueueCommit);
+  triggerDiscardEffect(side, returnSide, card, queueIndex, animationOrder || 0, deferQueueCommit, delayMs);
   if (deferQueueCommit) {
     return;
   }
@@ -4717,6 +6493,7 @@ function discardQueuedCard(side, card, queueIndex, animationOrder, deferQueueCom
   clearRoundCardState(card);
   delete card.returnToSideId;
   if (!isBattleTemporaryCard(card)) {
+    registerCardEnteredDiscard(card);
     returnSide.discardPile.push(card);
   }
 }
@@ -4739,7 +6516,20 @@ function commitDeferredDiscardEffect(effect) {
   clearRoundCardState(effect.card);
   delete effect.card.returnToSideId;
   if (targetSide && !isBattleTemporaryCard(effect.card)) {
+    registerCardEnteredDiscard(effect.card);
     targetSide.discardPile.push(effect.card);
+  }
+}
+
+function registerCardEnteredDiscard(card) {
+  if (!card) {
+    return;
+  }
+  if (card.effect === EFFECT_BAIT) {
+    card.baitDiscardBonus = (typeof card.baitDiscardBonus === "number" ? card.baitDiscardBonus : 0) + 2;
+  } else if (card.effect === EFFECT_FAKE_GOODS) {
+    card.fakeGoodsDiscardPenalty =
+      (typeof card.fakeGoodsDiscardPenalty === "number" ? card.fakeGoodsDiscardPenalty : 0) - 2;
   }
 }
 
@@ -5285,7 +7075,7 @@ function canPlayerAct() {
   );
 }
 
-function triggerDrawEffect(side, card) {
+function triggerDrawEffect(side, card, options) {
   if (!card) {
     return;
   }
@@ -5301,7 +7091,7 @@ function triggerDrawEffect(side, card) {
     startedAt: Date.now()
   });
 
-  if (card.type === CARD_BOMB) {
+  if (card.type === CARD_BOMB && !(options && options.suppressBomb)) {
     activeEffects.push({
       type: "bomb",
       sideId: side.id,
@@ -5311,10 +7101,14 @@ function triggerDrawEffect(side, card) {
     });
   } else if (card.effect === EFFECT_CHOPSTICKS) {
     applyChopsticksEffectFor(side, card);
+  } else if (card.effect === EFFECT_DELIVERY) {
+    applyDeliveryEffectFor(side, card);
+  } else if (card.effect === EFFECT_CALM) {
+    applyCalmEffectFor(side);
   }
 }
 
-function triggerDiscardEffect(sourceSide, targetSide, card, queueIndex, order, deferQueueCommit) {
+function triggerDiscardEffect(sourceSide, targetSide, card, queueIndex, order, deferQueueCommit, delayMs) {
   if (!card || typeof queueIndex !== "number") {
     return;
   }
@@ -5326,7 +7120,7 @@ function triggerDiscardEffect(sourceSide, targetSide, card, queueIndex, order, d
     card: card,
     queueIndex: Math.max(0, queueIndex),
     deferQueueCommit: !!deferQueueCommit,
-    startedAt: Date.now() + Math.max(0, order || 0) * DISCARD_ANIM_STAGGER
+    startedAt: Date.now() + Math.max(0, delayMs || 0) + Math.max(0, order || 0) * DISCARD_ANIM_STAGGER
   });
 }
 
@@ -5509,6 +7303,21 @@ function handleTouch(event) {
 
       if (pick && strengthenIdx >= 0 && pick.index !== strengthenIdx && pick.card && pick.card.type === CARD_SCORE) {
         applyStrengthenEffect(pick.index);
+      } else if (hitButton(point, buttons.skipEffect)) {
+        modal = null;
+        modalStack = [];
+        openNextPlayerPendingActiveModalOrAdvance();
+      }
+      return;
+    }
+
+    if (modal.type === "selectBadReviewTarget") {
+      const pick = queueCardHitAreas.find(function (area) {
+        return area.side.id === "ai" && hitButton(point, area);
+      });
+
+      if (pick && pick.card && pick.card.type === CARD_SCORE) {
+        applyBadReviewEffect(pick.index);
       } else if (hitButton(point, buttons.skipEffect)) {
         modal = null;
         modalStack = [];
@@ -5982,10 +7791,28 @@ function update(frameNow) {
     const activeBeforeAiEffects = game ? game.active : "";
     pendingAiActiveEffect = null;
     const list = chain && chain.length ? chain.slice() : legacyCard ? [legacyCard] : [];
-    list.forEach(function (c) {
-      resolveAiActiveEffect(c);
-    });
+    const next = list.shift();
+    if (next) {
+      resolveAiActiveEffect(next);
+    }
     if (scene === "playing") {
+      if (pendingAiActiveEffect && list.length > 0) {
+        const queued = pendingAiActiveEffect.aiEffectChain && pendingAiActiveEffect.aiEffectChain.length
+          ? pendingAiActiveEffect.aiEffectChain.slice()
+          : pendingAiActiveEffect.card
+            ? [pendingAiActiveEffect.card]
+            : [];
+        pendingAiActiveEffect.aiEffectChain = list.concat(queued);
+        delete pendingAiActiveEffect.card;
+        return;
+      }
+      if (!pendingAiActiveEffect && list.length > 0) {
+        pendingAiActiveEffect = {
+          aiEffectChain: list,
+          resolveAt: Date.now() + DRAW_ANIM_DURATION
+        };
+        return;
+      }
       if (pendingAiActiveEffect || pendingActiveEffect || (game && game.active !== activeBeforeAiEffects)) {
         return;
       }
@@ -6419,8 +8246,7 @@ function drawVictoryRewardConfirmModal(width, height) {
     h: panelH
   };
   drawVictoryRewardPanel(panel);
-  drawCenteredText("还有奖励未领取", panel.x + panel.w / 2, panel.y + 42, 20, THEME.text, "bold");
-  drawCenteredText("确定放弃剩余奖励并继续吗？", panel.x + panel.w / 2, panel.y + 76, 13, THEME.muted, "normal");
+  drawCenteredText("还有未领取的奖励，确认放弃吗？", panel.x + panel.w / 2, panel.y + 56, 17, THEME.text, "bold");
 
   const gap = 10;
   const btnH = 42;
@@ -6428,8 +8254,8 @@ function drawVictoryRewardConfirmModal(width, height) {
   const y = panel.y + panel.h - 58;
   buttons.rewardConfirmBack = { x: panel.x + 20, y: y, w: btnW, h: btnH };
   buttons.rewardConfirmSkip = { x: panel.x + 20 + btnW + gap, y: y, w: btnW, h: btnH };
-  drawButton(buttons.rewardConfirmBack, "返回领取", THEME.button, "#120613", true);
-  drawButton(buttons.rewardConfirmSkip, "放弃继续", THEME.buttonStop, "#061d1b", true);
+  drawButton(buttons.rewardConfirmBack, "取消", THEME.button, "#120613", true);
+  drawButton(buttons.rewardConfirmSkip, "确定", THEME.buttonStop, "#061d1b", true);
 }
 
 function drawBossBombRewardModal(width, height) {
@@ -6667,8 +8493,6 @@ function drawBackstage(width, height) {
     drawBlackMarketEmptyState(panel.x + 20, shelfY, innerW, shelfH);
   }
 
-  drawBlackMarketActionDock(panel.x + 20, refreshRemoveY - 10, innerW, btnH * 2 + btnGap + 20);
-
   const refreshCost = getShopRefreshNextCost();
   const refreshOk = canRefreshShop();
   const pairW = (innerW - btnGap) / 2;
@@ -6683,74 +8507,24 @@ function drawBackstage(width, height) {
 
 function drawBackstageRoom(width, height, panel, bottomBar) {
   drawRouteBackground(width, height);
-  const room = { x: 8, y: 8, w: width - 16, h: bottomBar.y - 18 };
-  const backdrop = ctx.createLinearGradient(0, room.y, 0, room.y + room.h);
-  backdrop.addColorStop(0, "#15101c");
-  backdrop.addColorStop(0.48, "#090d18");
-  backdrop.addColorStop(1, "#050609");
-  ctx.fillStyle = backdrop;
-  roundRect(room.x, room.y, room.w, room.h, 12, true, false);
-
-  const glow = ctx.createRadialGradient(
-    panel.x + panel.w * 0.74,
-    panel.y + panel.h * 0.26,
-    12,
-    panel.x + panel.w * 0.74,
-    panel.y + panel.h * 0.26,
-    panel.w * 0.82
-  );
-  glow.addColorStop(0, "rgba(240, 93, 143, 0.18)");
-  glow.addColorStop(0.42, "rgba(94, 231, 255, 0.08)");
-  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(room.x, room.y, room.w, room.h);
-
-  ctx.save();
-  ctx.globalAlpha = 0.22;
-  ctx.strokeStyle = "rgba(255, 224, 113, 0.22)";
-  ctx.lineWidth = 1;
-  for (let i = 0; i < 4; i += 1) {
-    const y = panel.y + panel.h * (0.24 + i * 0.17);
-    ctx.beginPath();
-    ctx.moveTo(panel.x + 22, y);
-    ctx.lineTo(panel.x + panel.w - 22, y - 18);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
-  ctx.lineWidth = 1;
-  roundRect(room.x + 0.5, room.y + 0.5, room.w - 1, room.h - 1, 12, false, true);
-
-  const stall = ctx.createLinearGradient(0, panel.y, 0, panel.y + panel.h);
-  stall.addColorStop(0, "rgba(13, 17, 31, 0.82)");
-  stall.addColorStop(1, "rgba(5, 8, 15, 0.76)");
-  ctx.fillStyle = stall;
-  ctx.strokeStyle = "rgba(94, 231, 255, 0.28)";
-  ctx.lineWidth = 1.3;
-  roundRect(panel.x, panel.y, panel.w, panel.h, 10, true, true);
-
-  ctx.strokeStyle = "rgba(240, 93, 143, 0.4)";
-  ctx.lineWidth = 1.5;
-  roundRect(panel.x + 5, panel.y + 5, panel.w - 10, panel.h - 10, 7, false, true);
+  drawPanel(panel, "rgba(16, 20, 35, 0.9)", { cornerRadius: 10, glowBrightness: 0.75 });
+  drawPanelRim(panel, THEME.panelEdgeCool, { cornerRadius: 8, glowBrightness: 0.6, inset: 3 });
 }
 
 function drawBlackMarketHeader(rect) {
   ctx.save();
-  const plate = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
-  plate.addColorStop(0, "rgba(240, 93, 143, 0.2)");
-  plate.addColorStop(0.52, "rgba(7, 13, 25, 0.82)");
-  plate.addColorStop(1, "rgba(94, 231, 255, 0.18)");
-  ctx.fillStyle = plate;
-  ctx.strokeStyle = "rgba(255, 224, 113, 0.42)";
-  ctx.lineWidth = 1.2;
-  roundRect(rect.x, rect.y, rect.w, rect.h, 8, true, true);
-
-  ctx.shadowColor = "rgba(94, 231, 255, 0.32)";
-  ctx.shadowBlur = 14;
-  drawText("黑市", rect.x + 18, rect.y + 33, 24, THEME.text, "bold");
+  ctx.shadowColor = "rgba(94, 231, 255, 0.28)";
+  ctx.shadowBlur = 12;
+  drawText("黑市", rect.x + 18, rect.y + 31, 24, THEME.text, "bold");
   ctx.shadowBlur = 0;
-  drawText("偷来的筹码，换一点活路", rect.x + 18, rect.y + 58, 12, "rgba(244, 247, 255, 0.68)", "normal");
+  drawText("偷来的筹码，换一点活路", rect.x + 18, rect.y + 55, 12, THEME.muted, "normal");
+
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.28)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(rect.x + 18, rect.y + rect.h - 8);
+  ctx.lineTo(rect.x + rect.w - 18, rect.y + rect.h - 8);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -6777,21 +8551,16 @@ function drawShopShelf(items, x, y, width, height, viewportWidth, viewportHeight
 
 function drawShopTile(tile, item, index, viewportWidth, viewportHeight) {
   const sold = !!(item && item.bought);
-  const accent = sold ? "rgba(143, 155, 181, 0.34)" : index % 2 === 0 ? "rgba(94, 231, 255, 0.6)" : "rgba(240, 93, 143, 0.58)";
-  const fill = ctx.createLinearGradient(0, tile.y, 0, tile.y + tile.h);
-  fill.addColorStop(0, "rgba(15, 20, 35, 0.92)");
-  fill.addColorStop(1, "rgba(6, 9, 17, 0.94)");
+  const accent = sold ? "rgba(143, 155, 181, 0.3)" : "rgba(94, 231, 255, 0.34)";
+  const fill = sold ? "rgba(18, 21, 30, 0.78)" : "rgba(13, 20, 35, 0.86)";
 
   ctx.save();
-  ctx.shadowColor = sold ? "rgba(0, 0, 0, 0.34)" : accent;
-  ctx.shadowBlur = sold ? 4 : 9;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.28)";
+  ctx.shadowBlur = 4;
   ctx.fillStyle = fill;
   ctx.strokeStyle = accent;
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1;
   roundRect(tile.x, tile.y, tile.w, tile.h, 8, true, true);
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(244, 247, 255, 0.08)";
-  roundRect(tile.x + 5, tile.y + 5, tile.w - 10, tile.h - 10, 5, false, true);
   ctx.restore();
 
   if (!item || !item.card) {
@@ -6828,8 +8597,8 @@ function drawShopTile(tile, item, index, viewportWidth, viewportHeight) {
 
 function drawBlackMarketEmptyState(x, y, w, h) {
   const box = { x: x + 10, y: y + h * 0.28, w: w - 20, h: 72 };
-  ctx.fillStyle = "rgba(7, 11, 20, 0.72)";
-  ctx.strokeStyle = "rgba(94, 231, 255, 0.24)";
+  ctx.fillStyle = "rgba(13, 20, 35, 0.78)";
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.22)";
   ctx.lineWidth = 1;
   roundRect(box.x, box.y, box.w, box.h, 8, true, true);
   drawCenteredMiddleText("暂无卡可售", box.x + box.w / 2, box.y + 28, 16, THEME.text, "bold");
@@ -6837,53 +8606,44 @@ function drawBlackMarketEmptyState(x, y, w, h) {
 }
 
 function drawBlackMarketActionDock(x, y, w, h) {
-  ctx.save();
-  const dock = ctx.createLinearGradient(0, y, 0, y + h);
-  dock.addColorStop(0, "rgba(7, 11, 20, 0.2)");
-  dock.addColorStop(1, "rgba(7, 11, 20, 0.72)");
-  ctx.fillStyle = dock;
-  ctx.strokeStyle = "rgba(94, 231, 255, 0.18)";
-  ctx.lineWidth = 1;
-  roundRect(x, y, w, h, 8, true, true);
-  ctx.restore();
 }
 
 function drawBlackMarketButton(rect, label, tone, enabled) {
-  let fillA = "rgba(240, 93, 143, 0.92)";
-  let fillB = "rgba(150, 42, 91, 0.96)";
-  let edge = "rgba(240, 93, 143, 0.82)";
-  let textColor = "#120613";
+  let fillA = "rgba(47, 56, 69, 0.96)";
+  let fillB = "rgba(27, 34, 45, 0.98)";
+  let edge = "rgba(170, 181, 202, 0.28)";
+  let textColor = THEME.text;
 
   if (tone === "cool") {
-    fillA = "rgba(75, 214, 199, 0.92)";
-    fillB = "rgba(27, 123, 126, 0.96)";
-    edge = "rgba(94, 231, 255, 0.82)";
-    textColor = "#061d1b";
+    fillA = "rgba(35, 91, 91, 0.96)";
+    fillB = "rgba(18, 58, 63, 0.98)";
+    edge = "rgba(94, 231, 255, 0.38)";
+    textColor = "#e8fffb";
   } else if (tone === "gold") {
-    fillA = "rgba(255, 224, 113, 0.94)";
-    fillB = "rgba(226, 146, 56, 0.96)";
-    edge = "rgba(255, 224, 113, 0.9)";
-    textColor = "#1c1010";
+    fillA = "rgba(178, 142, 64, 0.78)";
+    fillB = "rgba(116, 82, 36, 0.86)";
+    edge = "rgba(255, 224, 113, 0.32)";
+    textColor = "#fff0b8";
   } else if (tone === "disabled" || !enabled) {
-    fillA = "rgba(59, 63, 82, 0.9)";
-    fillB = "rgba(38, 43, 59, 0.92)";
-    edge = "rgba(143, 155, 181, 0.42)";
-    textColor = "rgba(244, 247, 255, 0.58)";
+    fillA = "rgba(42, 47, 59, 0.9)";
+    fillB = "rgba(28, 33, 43, 0.92)";
+    edge = "rgba(143, 155, 181, 0.28)";
+    textColor = "rgba(244, 247, 255, 0.5)";
   }
 
   ctx.save();
   const g = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
   g.addColorStop(0, fillA);
   g.addColorStop(1, fillB);
-  ctx.shadowColor = enabled ? edge : "rgba(0, 0, 0, 0.36)";
-  ctx.shadowBlur = enabled ? 8 : 3;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.36)";
+  ctx.shadowBlur = enabled ? 5 : 2;
   ctx.shadowOffsetY = 2;
   ctx.fillStyle = g;
-  ctx.strokeStyle = enabled ? "rgba(255, 255, 255, 0.78)" : edge;
-  ctx.lineWidth = 1.6;
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 1.2;
   roundRect(rect.x, rect.y, rect.w, rect.h, 7, true, true);
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
   ctx.lineWidth = 1;
   roundRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 4, false, true);
   drawCenteredMiddleText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5, Math.min(14, Math.max(11, rect.h * 0.36)), textColor, "bold");
@@ -8556,6 +10316,11 @@ function drawPileModal(width, height) {
     return;
   }
 
+  if (modal.type === "selectBadReviewTarget") {
+    drawBadReviewTargetModal(width, height);
+    return;
+  }
+
   if (modal.type === "selectHookTarget") {
     drawHookTargetModal(width, height);
     return;
@@ -8746,10 +10511,10 @@ function drawCopyTargetModal(width, height) {
 
 function drawShieldTargetModal(width, height) {
   const controls = getGameplayControlRects(width, height);
-  drawBottomPrompt(controls, "选择回收目标", "点击己方队列中另一张牌，将其随机洗回己方抽牌堆（不能选回收卡自身）。");
+  drawBottomPrompt(controls, "选择回滚目标", "点击己方队列中另一张牌，将其随机洗回己方抽牌堆（不能选回滚卡自身）。");
   const effectControls = getEffectControlRects(controls);
   buttons.skipEffect = effectControls.full;
-  drawButton(buttons.skipEffect, "取消回收", THEME.buttonStop, "#061d1b", true);
+  drawButton(buttons.skipEffect, "取消回滚", THEME.buttonStop, "#061d1b", true);
 }
 
 function drawSwapTargetModal(width, height) {
@@ -8766,6 +10531,14 @@ function drawStrengthenTargetModal(width, height) {
   const effectControls = getEffectControlRects(controls);
   buttons.skipEffect = effectControls.full;
   drawButton(buttons.skipEffect, "取消强化", THEME.buttonStop, "#061d1b", true);
+}
+
+function drawBadReviewTargetModal(width, height) {
+  const controls = getGameplayControlRects(width, height);
+  drawBottomPrompt(controls, "选择差评目标", "点击对手队列中的一张记分牌，使其本局分数减半。");
+  const effectControls = getEffectControlRects(controls);
+  buttons.skipEffect = effectControls.full;
+  drawButton(buttons.skipEffect, "取消差评", THEME.buttonStop, "#061d1b", true);
 }
 
 function drawHookTargetModal(width, height) {
@@ -8870,7 +10643,7 @@ function drawRouteEventModal(width, height) {
     drawText(choice.name, textX, rect.y + 25 + choiceTextOffsetY, 15, enabled ? THEME.gold : THEME.muted, "bold");
     drawWrappedText(choice.detail, textX, rect.y + 46 + choiceTextOffsetY, textW, 12, 16, enabled ? THEME.text : THEME.muted, "normal");
     if (!enabled) {
-      drawText("可移除牌不足", rect.x + rect.w - 92, rect.y + 25, 12, THEME.danger, "bold");
+      drawText(getRouteEventOptionDisabledReason(choice), rect.x + rect.w - 92, rect.y + 25, 12, THEME.danger, "bold");
     }
     ctx.restore();
   });
@@ -9194,7 +10967,8 @@ function isActiveEffectCard(card) {
     (modal.type === "activeEffect" ||
       modal.type === "selectStealTarget" ||
       modal.type === "selectCopyTarget" ||
-      modal.type === "selectShieldTarget") &&
+      modal.type === "selectShieldTarget" ||
+      modal.type === "selectBadReviewTarget") &&
     modal.card === card
   );
 }
@@ -9235,6 +11009,7 @@ function drawMiniCard(card, x, y, w, h) {
 
   const isBomb = card.type === CARD_BOMB;
   const isTemp = isBattleTemporaryCard(card);
+  const isNegative = card.negativeCard === true;
 
   ctx.save();
   if (isTemp) {
@@ -9257,6 +11032,12 @@ function drawMiniCard(card, x, y, w, h) {
     innerFill = isBomb ? "rgba(92, 68, 22, 0.58)" : "rgba(255, 248, 210, 0.82)";
     mainColor = isBomb ? "rgba(184, 132, 28, 0.96)" : "rgba(110, 82, 18, 0.94)";
     effBottomColor = isBomb ? mainColor : "rgba(92, 72, 22, 0.72)";
+  } else if (isNegative) {
+    outerFill = "#24103a";
+    outerStroke = "rgba(196, 126, 255, 0.9)";
+    innerFill = "rgba(76, 33, 116, 0.88)";
+    mainColor = "#f4e8ff";
+    effBottomColor = "rgba(229, 198, 255, 0.88)";
   } else {
     outerFill = isBomb ? "#1a0710" : "#dfe7f2";
     outerStroke = isBomb ? "rgba(255, 75, 97, 0.92)" : "rgba(94, 231, 255, 0.76)";
@@ -9278,7 +11059,11 @@ function drawMiniCard(card, x, y, w, h) {
   ctx.fillStyle = innerFill;
   roundRect(sx + inset, sy + inset, edge - inset * 2, edge - inset * 2, innerRadius, true, false);
 
-  ctx.strokeStyle = isBomb ? "rgba(255, 255, 255, 0.08)" : "rgba(17, 24, 39, 0.12)";
+  ctx.strokeStyle = isNegative
+    ? "rgba(255, 255, 255, 0.12)"
+    : isBomb
+      ? "rgba(255, 255, 255, 0.08)"
+      : "rgba(17, 24, 39, 0.12)";
   ctx.lineWidth = 1;
   roundRect(sx + inset + 2, sy + inset + 2, edge - inset * 2 - 4, edge - inset * 2 - 4, Math.max(1, innerRadius - 2), false, true);
 
@@ -9391,6 +11176,7 @@ function roundRect(x, y, w, h, radius, fill, stroke) {
 
 function drawHearts(side, x, y) {
   const layout = getThresholdLayout();
+  const maxHp = getSideMaxHp(side);
   const labelX = x + layout.labelOffsetX;
   const labelY = y + layout.labelOffsetY;
 
@@ -9407,7 +11193,7 @@ function drawHearts(side, x, y) {
 
   const recoverPulse = hpRecoverPulse[side.id];
 
-  for (let i = 0; i < MAX_HP; i += 1) {
+  for (let i = 0; i < maxHp; i += 1) {
     const heartX = heartStartX + i * layout.pointGap;
     const isAlive = i < side.hp;
     const isFlashingLostHeart = flash && i === flash.lostHeartIndex;
