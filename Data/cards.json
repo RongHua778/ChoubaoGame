@@ -56,12 +56,12 @@
       "special": false,
       "unlocked": true,
       "shopPrice": 5,
-      "baseScore": -1,
+      "baseScore": 0,
       "effectName": "埋伏",
       "effectDescription": "弃置：往对手弃牌堆中放入一张“临时”炸弹",
       "card": {
         "type": "score",
-        "value": -1,
+        "value": 0,
         "effect": "ambush",
         "displayName": "埋伏"
       }
@@ -153,13 +153,13 @@
       "unlocked": true,
       "shopPrice": 4,
       "baseScore": 1,
-      "effectName": "回滚",
+      "effectName": "回收",
       "effectDescription": "主动：选择队列中另外一张卡，将其洗回抽牌堆",
       "card": {
         "type": "score",
         "value": 1,
         "effect": "shield",
-        "displayName": "回滚"
+        "displayName": "回收"
       }
     },
     {
@@ -186,7 +186,7 @@
       "shopPrice": 5,
       "baseScore": 0,
       "effectName": "偷窃",
-      "effectDescription": "主动：选择对手队列中的一个卡，将其放入自身的队列（弃牌后返回对手弃牌堆）",
+      "effectDescription": "主动：随机偷取对手队列中的一个卡，将其放入自身的队列（弃牌后返回对手弃牌堆）",
       "card": {
         "type": "score",
         "value": 0,
@@ -279,13 +279,13 @@
       "negative": false,
       "special": false,
       "unlocked": true,
-      "shopPrice": 4,
-      "baseScore": 4,
+      "shopPrice": 5,
+      "baseScore": 5,
       "effectName": "贷款",
       "effectDescription": "被动：在队列中时，对手每再抽一张，则自身-1分",
       "card": {
         "type": "score",
-        "value": 4,
+        "value": 5,
         "effect": "menace",
         "displayName": "贷款"
       }
@@ -346,7 +346,7 @@
       "shopPrice": 6,
       "baseScore": 0,
       "effectName": "火药",
-      "effectDescription": "被动：对手队列中每有1个炸弹，自身+2分",
+      "effectDescription": "被动：每当对手失去1点阈值时，自身+3分",
       "card": {
         "type": "score",
         "value": 0,
@@ -585,13 +585,13 @@
       "unlocked": true,
       "shopPrice": 6,
       "baseScore": 0,
-      "effectName": "小鱼",
+      "effectName": "螃蟹",
       "effectDescription": "被动：每次进入弃牌堆，本局期间+2分",
       "card": {
         "type": "score",
         "value": 0,
         "effect": "bait",
-        "displayName": "小鱼"
+        "displayName": "螃蟹"
       }
     },
     {
@@ -689,6 +689,198 @@
         "effect": "fakeGoods",
         "displayName": "假货"
       }
+    },
+    {
+      "id": 44,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 8,
+      "baseScore": 2,
+      "effectName": "水军",
+      "effectDescription": "主动：往对手弃牌堆中放入两张临时的“零分”",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "waterArmy",
+        "displayName": "水军"
+      }
+    },
+    {
+      "id": 45,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 10,
+      "baseScore": 3,
+      "effectName": "榜一",
+      "effectDescription": "被动：如果是双方队列中分数最高的卡，则自身+4分",
+      "card": {
+        "type": "score",
+        "value": 3,
+        "effect": "topFan",
+        "displayName": "榜一"
+      }
+    },
+    {
+      "id": 46,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 1,
+      "effectName": "控评",
+      "effectDescription": "主动：随机使对手队列中两张卡-1分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "commentControl",
+        "displayName": "控评"
+      }
+    },
+    {
+      "id": 47,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 0,
+      "effectName": "求和",
+      "effectDescription": "被动：分数增加相邻的两张卡的分数之和",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "summation",
+        "displayName": "求和"
+      }
+    },
+    {
+      "id": 48,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 6,
+      "baseScore": 2,
+      "effectName": "合并",
+      "effectDescription": "主动：选择队列中一张牌弃掉，自身增加被弃掉牌的分数",
+      "card": {
+        "type": "score",
+        "value": 2,
+        "effect": "mergeTerm",
+        "displayName": "合并"
+      }
+    },
+    {
+      "id": 49,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 0,
+      "effectName": "翻倍",
+      "effectDescription": "主动：选择队列中一张牌，使其增加其当前分数",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "doubleScore",
+        "displayName": "翻倍"
+      }
+    },
+    {
+      "id": 50,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 10,
+      "baseScore": 3,
+      "effectName": "狮子",
+      "effectDescription": "主动：选择对手队列中的一张牌，将其弃置",
+      "card": {
+        "type": "score",
+        "value": 3,
+        "effect": "lion",
+        "displayName": "狮子"
+      }
+    },
+    {
+      "id": 51,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 10,
+      "baseScore": 3,
+      "effectName": "犀牛",
+      "effectDescription": "被动：与该卡同一行的卡，获得+1分",
+      "card": {
+        "type": "score",
+        "value": 3,
+        "effect": "rhino",
+        "displayName": "犀牛"
+      }
+    },
+    {
+      "id": 52,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 8,
+      "baseScore": 1,
+      "effectName": "兽王",
+      "effectDescription": "被动：队列中每有一张不同的动物卡，就获得+2分",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "beastKing",
+        "displayName": "兽王"
+      }
+    },
+    {
+      "id": 53,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 5,
+      "baseScore": 0,
+      "effectName": "鹦鹉",
+      "effectDescription": "主动：选择队列中另外一张卡，变为它的复制（进入弃牌堆后恢复）",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "parrot",
+        "displayName": "鹦鹉"
+      }
+    },
+    {
+      "id": 54,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 1,
+      "effectName": "斑马",
+      "effectDescription": "被动：每进行一次抽取，自身分数在1和3之间交替变化",
+      "card": {
+        "type": "score",
+        "value": 1,
+        "effect": "zebra",
+        "displayName": "斑马"
+      }
+    },
+    {
+      "id": 55,
+      "negative": false,
+      "special": false,
+      "unlocked": true,
+      "shopPrice": 4,
+      "baseScore": 0,
+      "effectName": "日志",
+      "effectDescription": "被动：每当有牌离开队列，则自身+2分",
+      "card": {
+        "type": "score",
+        "value": 0,
+        "effect": "log",
+        "displayName": "日志"
+      }
     }
   ],
   "negativeCards": [
@@ -716,7 +908,7 @@
       "shopPrice": 4,
       "baseScore": 0,
       "effectName": "腐蚀",
-      "effectDescription": "被动：每再抽1张，则自身-1分",
+      "effectDescription": "被动：抽到时，随机弃掉你的另外一张牌",
       "card": {
         "type": "score",
         "value": 0,
@@ -749,14 +941,14 @@
       "unlocked": false,
       "shopPrice": 4,
       "baseScore": 0,
-      "effectName": "火药",
+      "effectName": "易伤",
       "effectDescription": "被动：抽到炸弹时，额外扣除1点阈值",
       "card": {
         "type": "score",
         "value": 0,
         "effect": "gunpowder",
         "negativeCard": true,
-        "displayName": "火药"
+        "displayName": "易伤"
       }
     }
   ],

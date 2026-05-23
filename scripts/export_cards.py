@@ -67,6 +67,18 @@ EFFECT_BY_CARD_ID = {
     41: "delivery",
     42: "badCoin",
     43: "fakeGoods",
+    44: "waterArmy",
+    45: "topFan",
+    46: "commentControl",
+    47: "summation",
+    48: "mergeTerm",
+    49: "doubleScore",
+    50: "lion",
+    51: "rhino",
+    52: "beastKing",
+    53: "parrot",
+    54: "zebra",
+    55: "log",
 }
 
 EFFECT_BY_NAME = {
@@ -109,6 +121,8 @@ EFFECT_BY_NAME = {
     "腐蚀": "corrode",
     "封禁": "lockdown",
     "火药": "gunpowder",
+    "易伤": "gunpowder",
+    "日志": "log",
 }
 
 
