@@ -1,6 +1,41 @@
 const canvas = tap.createCanvas();
 const ctx = canvas.getContext("2d");
 
+const BGM_AUDIO_SRC = "audio/HiddenHand.mp3";
+const BUTTON_CLICK_AUDIO_SRC = "audio/Sound_ButtonClick.mp3";
+const BUTTON_CLICK_AUDIO_POOL_SIZE = 4;
+const ROUTE_CLICK_AUDIO_SRC = "audio/Sound_RouteClick.mp3";
+const ROUTE_CLICK_AUDIO_POOL_SIZE = 3;
+const PLAY_CARD_AUDIO_SRC = "audio/Sound_PlayCard.mp3";
+const PLAY_CARD_AUDIO_POOL_SIZE = 5;
+const EXPLOSION_AUDIO_SRC = "audio/Sound_Explosion.mp3";
+const EXPLOSION_AUDIO_POOL_SIZE = 3;
+const RECOVER_AUDIO_SRC = "audio/Sound_Recover.mp3";
+const RECOVER_AUDIO_POOL_SIZE = 3;
+const ROUTE_EVENT_TEXT_CHAR_INTERVAL_MS = 28;
+const ROUTE_EVENT_TEXT_FADE_MS = 120;
+const ROUTE_EVENT_CHOICES_DELAY_MS = 180;
+const ROUTE_EVENT_CHOICE_STAGGER_MS = 150;
+const ROUTE_EVENT_CHOICE_FADE_MS = 180;
+let bgmAudio = null;
+let bgmStarted = false;
+let buttonClickAudios = [];
+let buttonClickAudioIndex = 0;
+let buttonClickPlayedForCurrentTouch = false;
+let domButtonClickSoundBound = false;
+let buttonPressPoint = null;
+let routePressNodeId = null;
+let routeClickAudios = [];
+let routeClickAudioIndex = 0;
+let playCardAudios = [];
+let playCardAudioIndex = 0;
+let explosionAudios = [];
+let explosionAudioIndex = 0;
+let recoverAudios = [];
+let recoverAudioIndex = 0;
+let routeEventExitWithoutTransition = false;
+let domButtonPressEffectBound = false;
+
 const CARD_SCORE = "score";
 const CARD_BOMB = "bomb";
 const EFFECT_STEAL = "steal";
@@ -114,7 +149,14 @@ const CATALOG_EFFECT_BY_ID = {
 };
 const MAX_HP = 3;
 const WIN_TARGET = 3;
+const AD_RETRY_LIMIT_PER_RUN = 3;
+const VICTORY_REWARD_AD_REROLL_LIMIT = 2;
 const RUN_WIN_TARGETS_BY_BOSS_ROUND = [3, 4, 5];
+const MODAL_FADE_IN_MS = 180;
+const MODAL_FADE_OUT_MS = 150;
+const SCENE_TRANSITION_CLOSE_MS = 540;
+const SCENE_TRANSITION_OPEN_MS = 540;
+const SCENE_TRANSITION_DIAMOND_SIZE = 76;
 const QUEUE_LIMIT = 10;
 const QUEUE_COLUMNS = 5;
 const QUEUE_ROWS = 2;
@@ -356,6 +398,12 @@ const DISCARD_ANIM_DURATION = 420;
 const DISCARD_ANIM_STAGGER = 90;
 const BOMB_ANIM_DURATION = 780;
 const HEART_FLASH_DURATION = 900;
+const QUEUE_BUST_FLASH_DURATION = 620;
+const BATTLE_ENTER_ANIM_DURATION = 460;
+const BATTLE_ENTER_AI_DELAY = 0;
+const BATTLE_ENTER_CENTER_DELAY = 120;
+const BATTLE_ENTER_PLAYER_DELAY = 220;
+const BATTLE_ENTER_CONTROLS_DELAY = 340;
 const BOTTOM_PROMPT_HEIGHT_DEFAULT = 46;
 const BOTTOM_PROMPT_GAP_DEFAULT = 8;
 const CARD_GRID_GAP = 8;
@@ -802,7 +850,7 @@ const DEFAULT_TITLE_MENU_LAYOUT = {
   startButtonWidth: null,
   /** 0～1：按钮顶部 Y = 屏高×该值；-1 或未设置：对齐对战控件 Y（与抽牌同款） */
   startButtonYRatio: null,
-  startButtonYOffset: 0,
+  startButtonYOffset: -40,
   /** 0～1：按钮水平位置（以锚点居中）；−1／未设置：按宽度模式默认对齐（draw 居中、full 靠边距） */
   startButtonCenterXRatio: null,
   fallbackLogoTextWhenNoImage: "",
@@ -810,6 +858,8 @@ const DEFAULT_TITLE_MENU_LAYOUT = {
   bootstrapLoadingHintYRatio: 0.552,
   bootstrapLoadingHintSize: 13
 };
+const TEST_WIN_BUTTON_VISIBLE = false;
+const TEST_BATTLE_BUTTON_VISIBLE = true;
 
 let scene = "title";
 let game = null;
@@ -828,10 +878,14 @@ let cardCatalogScrollArea = null;
 let cardCatalogDrag = null;
 let cardCatalogScrollY = 0;
 let cardCatalogEnteredAt = 0;
+let settlementDeckScrollArea = null;
+let settlementDeckDrag = null;
+let settlementDeckScrollY = 0;
 let rewardCardButtonHitAreas = [];
 let routeNodeHitAreas = [];
 let modal = null;
 let modalStack = [];
+let sceneTransition = null;
 let aiActionAt = 0;
 let roundAdvanceAt = 0;
 let activeEffects = [];
@@ -843,6 +897,8 @@ let tipsState = null;
 let winScoreSlotPulse = null;
 let roundLabelPulseAt = 0;
 let hpRecoverPulse = { player: null, ai: null };
+let queueBustFlash = { player: null, ai: null };
+let battleEnteredAt = 0;
 let matchVictoryRewardAt = 0;
 let routeMapEnteredAt = 0;
 let bossBombRewardFlight = null;
@@ -857,6 +913,8 @@ let thiefDeckOpponentLines = null;
 let playerDeckCardIds = null;
 let bootstrapReady = false;
 let expeditionRoundDecks = null;
+let currentBattleConfig = null;
+let retryChallengeAdPending = false;
 
 /** 运行时只读取 Data/cards.json（由 scripts/export_cards.py 按需生成）；不会在浏览器里跑表转换。 */
 const CARDS_JSON_URL = "./Data/cards.json";
@@ -1045,7 +1103,7 @@ function getTitleStartButtonRect(width, height) {
 
 function getTitleCatalogButtonRect(width, height) {
   const start = getTitleStartButtonRect(width, height);
-  const gap = Math.max(10, Math.min(16, height * 0.018));
+  const gap = Math.max(15, Math.min(24, height * 0.027));
   return {
     x: start.x,
     y: start.y - start.h - gap,
@@ -1637,6 +1695,15 @@ function queueOpponentSpeech(text, durationMs) {
   game.opponentSpeechBubble = { text: text.trim(), until: t + ms, startedAt: t };
 }
 
+function queueOpponentSpeechAt(text, startAt, durationMs) {
+  if (!game || typeof text !== "string" || !text.trim()) {
+    return;
+  }
+  const ms = typeof durationMs === "number" ? durationMs : OPPONENT_SPEECH_BUBBLE_MS;
+  const t = Math.max(Date.now(), typeof startAt === "number" ? startAt : Date.now());
+  game.opponentSpeechBubble = { text: text.trim(), until: t + ms, startedAt: t };
+}
+
 function tryOpponentSpeechCategory(category, probability) {
   if (!game || !game.opponentLines) {
     return;
@@ -1651,7 +1718,18 @@ function tryOpponentSpeechCategory(category, probability) {
 }
 
 function forceOpponentSpeechCategory(category) {
-  tryOpponentSpeechCategory(category, 1);
+  if (!game || !game.opponentLines) {
+    return;
+  }
+  const line = pickRandomOpponentLine(game.opponentLines, category);
+  if (!line) {
+    return;
+  }
+  if (category === "matchStart") {
+    queueOpponentSpeechAt(line, getBattleIntroCompleteTime());
+    return;
+  }
+  queueOpponentSpeech(line);
 }
 
 function applyThiefDeckPayload(data) {
@@ -2158,6 +2236,15 @@ function getCurrentRouteNode() {
   return getRouteNodeById(runState.currentRouteNodeId);
 }
 
+function getSelectedRouteNode() {
+  ensureRunState();
+  return getRouteNodeById(runState.selectedRouteNodeId);
+}
+
+function getActiveRouteNode() {
+  return getSelectedRouteNode() || getCurrentRouteNode();
+}
+
 function getNextRouteNodes() {
   ensureRunState();
   if (!runState.routeRows || runState.routeStep >= runState.routeRows.length - 1) {
@@ -2215,6 +2302,20 @@ function markRouteNodeVisited(node) {
   }
 }
 
+function beginRouteNodeVisit(node) {
+  ensureRunState();
+  runState.selectedRouteNodeId = node ? node.id : null;
+}
+
+function commitSelectedRouteNodeVisit() {
+  ensureRunState();
+  const node = getSelectedRouteNode();
+  if (node && node.id !== runState.currentRouteNodeId) {
+    markRouteNodeVisited(node);
+  }
+  return node;
+}
+
 function isRouteComplete() {
   ensureRunState();
   return runState.routeRows && runState.routeStep >= runState.routeRows.length - 1;
@@ -2253,7 +2354,7 @@ function selectRouteNode(node) {
     return;
   }
 
-  markRouteNodeVisited(node);
+  beginRouteNodeVisit(node);
   if (node.type === ROUTE_NODE_EVENT) {
     openRandomRouteEvent(node);
     return;
@@ -2278,6 +2379,7 @@ function countRemovableRunCards() {
 }
 
 function openRandomRouteEvent(node) {
+  routeEventExitWithoutTransition = false;
   const events = [
     openPaperShrineEvent,
     openHeavyPurseEvent,
@@ -2289,6 +2391,13 @@ function openRandomRouteEvent(node) {
   ];
   const openEvent = events[Math.floor(Math.random() * events.length)];
   openEvent(node);
+}
+
+function exitRouteEventToMap() {
+  modal = null;
+  modalStack = [];
+  buttons = {};
+  enterRouteMapImmediate();
 }
 
 function openPaperShrineEvent(node) {
@@ -2573,6 +2682,8 @@ function chooseRouteEventOption(index) {
     return;
   }
 
+  routeEventExitWithoutTransition = true;
+
   if (choice.id === "fate") {
     const removed = removeRandomRunCards(2);
     const gained = gainRandomEventCard("high");
@@ -2607,7 +2718,7 @@ function chooseRouteEventOption(index) {
   }
 
   if (choice.id === "takePurse") {
-    runState.gold += 8;
+    addRunGold(8);
     const curse = gainRandomNegativeEventCard();
     if (curse) {
       showTip("获得8金币，负面卡加入牌库：" + getCardName(curse), 2600);
@@ -2622,7 +2733,7 @@ function chooseRouteEventOption(index) {
   }
 
   if (choice.id === "takeCoins") {
-    runState.gold += 3;
+    addRunGold(3);
     modal = null;
     modalStack = [];
     showTip("获得3金币。", 2200);
@@ -2683,7 +2794,7 @@ function chooseRouteEventOption(index) {
   if (choice.id === "takeStrangeBomb") {
     runState.playerMaxHp = getPlayerMaxHp() + 1;
     const bomb = cloneFirstBombCardFromCatalog();
-    runState.deck.push(bomb);
+    addRunCard(bomb);
     modal = null;
     modalStack = [];
     showTip("阈值上限 +1，卡组加入1张炸弹。", 2600);
@@ -2743,7 +2854,7 @@ function chooseRouteEventOption(index) {
   }
 
   if (choice.id === "prayAndLeaveIdol") {
-    runState.gold += 2;
+    addRunGold(2);
     modal = null;
     modalStack = [];
     showTip("获得2金币。", 1800);
@@ -2754,6 +2865,7 @@ function chooseRouteEventOption(index) {
   if (choice.id === "placePurseOnScale") {
     const before = Math.max(0, runState.gold | 0);
     runState.gold = before * 2;
+    recordRunGoldGained(runState.gold - before);
     const curse = gainRandomNegativeEventCard();
     if (curse) {
       showTip("金币翻倍，负面卡加入牌库：" + getCardName(curse), 2600);
@@ -2768,7 +2880,7 @@ function chooseRouteEventOption(index) {
   }
 
   if (choice.id === "placeCoinsOnScale") {
-    runState.gold += 5;
+    addRunGold(5);
     modal = null;
     modalStack = [];
     showTip("投入5枚金币，获得10枚金币。", 2200);
@@ -2932,8 +3044,7 @@ function gainRandomEventCard(tier) {
   ensureRunState();
   const card = takeRandomEventCard(tier);
   if (card) {
-    runState.deck.push(card);
-    return card;
+    return addRunCard(card);
   }
   return null;
 }
@@ -2944,8 +3055,7 @@ function gainCatalogCardById(id) {
   if (!card) {
     return null;
   }
-  runState.deck.push(card);
-  return card;
+  return addRunCard(card);
 }
 
 function gainRandomNegativeEventCard() {
@@ -2964,8 +3074,7 @@ function gainRandomNegativeEventCard() {
     card.negativeCatalogId = cid;
   }
   card.negativeCard = true;
-  runState.deck.push(card);
-  return card;
+  return addRunCard(card);
 }
 
 function gainSpecialCatalogCardById(id) {
@@ -2982,8 +3091,7 @@ function gainSpecialCatalogCardById(id) {
       card.specialCatalogId = cid;
     }
     card.specialCard = true;
-    runState.deck.push(card);
-    return card;
+    return addRunCard(card);
   }
   return null;
 }
@@ -3056,6 +3164,11 @@ function makeRunState() {
   return {
     deck: getPlayerDeckCards(),
     gold: STARTING_GOLD,
+    stats: {
+      goldGained: 0,
+      cardsGained: 0,
+      highestScore: 0
+    },
     playerMaxHp: MAX_HP,
     battlesWon: 0,
     bossesDefeated: 0,
@@ -3069,6 +3182,7 @@ function makeRunState() {
     visitedRouteNodeIds: [],
     nextBattleInitialHpPenalty: 0,
     nextBattleMaxHpBonus: 0,
+    adRetryRemaining: AD_RETRY_LIMIT_PER_RUN,
     opponentChoices: DEFAULT_OPPONENT_CHOICES.map(function (opponent) {
       return Object.assign({}, opponent);
     })
@@ -3079,6 +3193,63 @@ function ensureRunState() {
   if (!runState) {
     runState = makeRunState();
   }
+  ensureRunStats();
+}
+
+function ensureRunStats() {
+  if (!runState) {
+    return null;
+  }
+  if (!runState.stats) {
+    runState.stats = {};
+  }
+  runState.stats.goldGained = Math.max(0, runState.stats.goldGained | 0);
+  runState.stats.cardsGained = Math.max(0, runState.stats.cardsGained | 0);
+  runState.stats.highestScore = Math.max(0, runState.stats.highestScore | 0);
+  return runState.stats;
+}
+
+function recordRunGoldGained(amount) {
+  const gain = Math.max(0, amount | 0);
+  if (!gain || !runState) {
+    return;
+  }
+  const stats = ensureRunStats();
+  stats.goldGained += gain;
+}
+
+function recordRunCardGained(count) {
+  const gain = Math.max(0, count | 0);
+  if (!gain || !runState) {
+    return;
+  }
+  const stats = ensureRunStats();
+  stats.cardsGained += gain;
+}
+
+function addRunGold(amount) {
+  ensureRunState();
+  const gain = Math.max(0, amount | 0);
+  runState.gold += gain;
+  recordRunGoldGained(gain);
+}
+
+function addRunCard(card) {
+  ensureRunState();
+  if (!card) {
+    return null;
+  }
+  runState.deck.push(card);
+  recordRunCardGained(1);
+  return card;
+}
+
+function recordRunHighestScore(score) {
+  if (!runState || typeof score !== "number" || isNaN(score)) {
+    return;
+  }
+  const stats = ensureRunStats();
+  stats.highestScore = Math.max(stats.highestScore || 0, Math.max(0, Math.floor(score)));
 }
 
 function makePlayerDeck(deckCards) {
@@ -3144,9 +3315,13 @@ function getMatchWinTarget() {
 }
 
 function startGame() {
-  runState = makeRunState();
-  seedAutoVisitedRouteCells();
-  enterRouteMap();
+  beginSceneTransition(function () {
+    currentBattleConfig = null;
+    retryChallengeAdPending = false;
+    runState = makeRunState();
+    seedAutoVisitedRouteCells();
+    enterRouteMapImmediate();
+  });
 }
 
 function getNextFightNumber() {
@@ -3168,7 +3343,7 @@ function injectBossPreBattleBomb(fightNumOrNode) {
     return;
   }
   ensureRunState();
-  runState.deck.push(cloneFirstBombCardFromCatalog());
+  addRunCard(cloneFirstBombCardFromCatalog());
   showTip("庄家战：牌组永久加入 1 张炸弹", TIPS_DEFAULT_DURATION_MS);
 }
 
@@ -3215,7 +3390,7 @@ function getRunBattleConfig(fightNumOrNode) {
 
 function startNextRunBattle() {
   ensureRunState();
-  const routeNode = getCurrentRouteNode();
+  const routeNode = getActiveRouteNode();
   if (routeNode) {
     const routeCfg = getRunBattleConfig(routeNode);
     let aiDeck = getExpeditionAiDeckForRouteNode(routeNode);
@@ -3280,14 +3455,41 @@ function startTestBattle(roundIdx, group, slotIdx) {
 }
 
 function enterRunVictory() {
-  scene = "runVictory";
+  beginSceneTransition(function () {
+    enterRunSettlementImmediate("victory");
+  });
+}
+
+function enterRunVictoryImmediate() {
+  enterRunSettlementImmediate("victory");
+}
+
+function enterRunSettlementImmediate(result) {
+  ensureRunState();
+  runState.endingResult = result === "failure" ? "failure" : "victory";
+  scene = "runSettlement";
   modal = null;
   modalStack = [];
   buttons = {};
+  settlementDeckScrollArea = null;
+  settlementDeckDrag = null;
+  settlementDeckScrollY = 0;
 }
 
 function startBattle(opponentName, aiDeckOverride, opponentLinesExplicit, aiStyleExplicit) {
+  beginSceneTransition(function () {
+    startBattleImmediate(opponentName, aiDeckOverride, opponentLinesExplicit, aiStyleExplicit);
+  });
+}
+
+function startBattleImmediate(opponentName, aiDeckOverride, opponentLinesExplicit, aiStyleExplicit) {
   ensureRunState();
+  currentBattleConfig = {
+    opponentName: opponentName,
+    aiDeckOverride: aiDeckOverride && aiDeckOverride.length ? aiDeckOverride.map(cloneCard) : null,
+    opponentLinesExplicit: opponentLinesExplicit,
+    aiStyleExplicit: aiStyleExplicit
+  };
   const aiDeck = aiDeckOverride && aiDeckOverride.length ? aiDeckOverride : undefined;
   const nextBattleMaxHpBonus = Math.max(0, runState.nextBattleMaxHpBonus | 0);
   runState.nextBattleMaxHpBonus = 0;
@@ -3329,15 +3531,18 @@ function startBattle(opponentName, aiDeckOverride, opponentLinesExplicit, aiStyl
   roundAdvanceAt = 0;
   matchVictoryRewardAt = 0;
   winScoreSlotPulse = null;
-  roundLabelPulseAt = 0;
+  battleEnteredAt = getBattleRevealStartTime();
+  roundLabelPulseAt = battleEnteredAt;
   hpRecoverPulse = { player: null, ai: null };
+  queueBustFlash = { player: null, ai: null };
   startRound();
+  roundLabelPulseAt = battleEnteredAt;
   forceOpponentSpeechCategory("matchStart");
 }
 
 function startRound() {
   game.round += 1;
-  roundLabelPulseAt = Date.now();
+  roundLabelPulseAt = battleEnteredAt && Date.now() < battleEnteredAt ? battleEnteredAt : Date.now();
   game.winner = null;
   game.message = "第 " + game.round + " 局：选择继续，或选择停手。";
   roundAdvanceAt = 0;
@@ -3357,7 +3562,7 @@ function startRound() {
 
   if (game.active === "ai") {
     game.message = "AI 思考中...";
-    aiActionAt = Date.now() + AI_DELAY;
+    aiActionAt = Math.max(Date.now(), battleEnteredAt || 0) + AI_DELAY;
   }
 }
 
@@ -3386,9 +3591,11 @@ function resetForRound(side) {
       slotIndex: side.hp - 1,
       startedAt: Date.now()
     };
+    playRecoverSound();
   } else {
     hpRecoverPulse[side.id] = null;
   }
+  queueBustFlash[side.id] = null;
   side.roundScore = 0;
   side.queue = [];
   side.stopped = false;
@@ -3568,6 +3775,7 @@ function drawCard(side) {
       side.busted = true;
       side.stopped = true;
       side.status = "淘汰";
+      triggerSideBustFeedback(side);
       if (side.id === "player") {
         showTip("你爆掉了", TIPS_DEFAULT_DURATION_MS);
       } else {
@@ -3597,6 +3805,7 @@ function syncRoundScores() {
 
   game.player.roundScore = calculateRoundScore(game.player);
   game.ai.roundScore = calculateRoundScore(game.ai);
+  recordRunHighestScore(game.player.roundScore);
 }
 
 function calculateRoundScore(side) {
@@ -3958,6 +4167,7 @@ function clearRoundCardState(card) {
   delete card.roundZebraDrawCount;
   delete card.roundBadReviewCount;
   delete card.roundFromDiscardPile;
+  delete card.roundPlayCardSoundPlayed;
 }
 
 function isBattleTemporaryCard(card) {
@@ -4532,7 +4742,8 @@ function openActiveEffectModal(card) {
   modal = {
     type: "activeEffect",
     title: getCardUIMainTitle(card),
-    card: card
+    card: card,
+    openedAt: Date.now()
   };
 }
 
@@ -4541,13 +4752,217 @@ function openModal(nextModal) {
     modalStack.push(modal);
   }
 
-  modal = nextModal;
+  modal = prepareModalForOpen(nextModal);
 }
 
 function closeModal() {
-  modal = modalStack.pop() || null;
+  if (!modal) {
+    return;
+  }
+  if (modal.closing) {
+    return;
+  }
+  modal.closing = true;
+  modal.closedAt = Date.now();
   pileModalDrag = null;
   pileModalScrollArea = null;
+}
+
+function prepareModalForOpen(nextModal) {
+  const prepared = nextModal || {};
+  prepared.openedAt = Date.now();
+  prepared.closing = false;
+  prepared.closedAt = 0;
+  return prepared;
+}
+
+function finalizeModalClose() {
+  modal = modalStack.pop() || null;
+  if (modal) {
+    modal.openedAt = Date.now() - MODAL_FADE_IN_MS;
+    modal.closing = false;
+    modal.closedAt = 0;
+  }
+}
+
+function getModalAnimationState() {
+  if (!modal) {
+    return { alpha: 0, scale: 1 };
+  }
+
+  const now = Date.now();
+  if (!modal.openedAt) {
+    modal.openedAt = now;
+  }
+
+  if (modal.closing) {
+    const closeElapsed = now - (modal.closedAt || now);
+    const closeProgress = clamp(closeElapsed / MODAL_FADE_OUT_MS, 0, 1);
+    if (closeProgress >= 1) {
+      finalizeModalClose();
+      if (!modal) {
+        return { alpha: 0, scale: 1 };
+      }
+      return getModalAnimationState();
+    }
+    return {
+      alpha: 1 - closeProgress,
+      scale: 1 - closeProgress * 0.012
+    };
+  }
+
+  const openElapsed = now - modal.openedAt;
+  const openProgress = clamp(openElapsed / MODAL_FADE_IN_MS, 0, 1);
+  const eased = 1 - Math.pow(1 - openProgress, 3);
+  return {
+    alpha: eased,
+    scale: 0.985 + eased * 0.015
+  };
+}
+
+function beginSceneTransition(applyChange) {
+  if (sceneTransition) {
+    if (typeof applyChange === "function") {
+      applyChange();
+    }
+    return;
+  }
+
+  sceneTransition = {
+    startedAt: Date.now(),
+    switched: false,
+    applyChange: typeof applyChange === "function" ? applyChange : function () {}
+  };
+}
+
+function updateSceneTransition(now) {
+  if (!sceneTransition) {
+    return false;
+  }
+
+  const elapsed = now - sceneTransition.startedAt;
+  if (!sceneTransition.switched && elapsed >= SCENE_TRANSITION_CLOSE_MS) {
+    sceneTransition.switched = true;
+    sceneTransition.applyChange();
+  }
+
+  if (elapsed >= SCENE_TRANSITION_CLOSE_MS + SCENE_TRANSITION_OPEN_MS) {
+    sceneTransition = null;
+    return false;
+  }
+
+  return true;
+}
+
+function getSceneTransitionCoverProgress(now) {
+  if (!sceneTransition) {
+    return 0;
+  }
+
+  const elapsed = now - sceneTransition.startedAt;
+  if (elapsed < SCENE_TRANSITION_CLOSE_MS) {
+    return clamp(elapsed / SCENE_TRANSITION_CLOSE_MS, 0, 1);
+  }
+
+  return 1 - clamp((elapsed - SCENE_TRANSITION_CLOSE_MS) / SCENE_TRANSITION_OPEN_MS, 0, 1);
+}
+
+function getSceneTransitionEndTime() {
+  if (!sceneTransition) {
+    return Date.now();
+  }
+
+  return sceneTransition.startedAt + SCENE_TRANSITION_CLOSE_MS + SCENE_TRANSITION_OPEN_MS;
+}
+
+function getBattleRevealStartTime() {
+  return getSceneTransitionEndTime();
+}
+
+function getBattleIntroCompleteTime() {
+  if (!battleEnteredAt) {
+    return Date.now();
+  }
+
+  return battleEnteredAt + BATTLE_ENTER_CONTROLS_DELAY + BATTLE_ENTER_ANIM_DURATION;
+}
+
+function drawSceneTransition(width, height, now) {
+  if (!sceneTransition) {
+    return;
+  }
+
+  const transitionNow = now || Date.now();
+  const elapsed = transitionNow - sceneTransition.startedAt;
+  const isOpening = elapsed >= SCENE_TRANSITION_CLOSE_MS;
+  const phaseProgress = isOpening
+    ? clamp((elapsed - SCENE_TRANSITION_CLOSE_MS) / SCENE_TRANSITION_OPEN_MS, 0, 1)
+    : clamp(elapsed / SCENE_TRANSITION_CLOSE_MS, 0, 1);
+  const cover = isOpening ? 1 - phaseProgress : phaseProgress;
+  if (cover <= 0 && !isOpening) {
+    return;
+  }
+
+  const cell = SCENE_TRANSITION_DIAMOND_SIZE;
+  const halfW = cell * 0.52;
+  const halfH = cell * 0.52;
+  const pitchX = halfW * 2;
+  const pitchY = halfH * 2;
+  const rows = Math.ceil(height / pitchY) + 3;
+  const cols = Math.ceil(width / pitchX) + 3;
+
+  ctx.save();
+  ctx.fillStyle = "#02030a";
+
+  function drawDiamond(cx, cy, diamondW, diamondH) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - diamondH);
+    ctx.lineTo(cx + diamondW, cy);
+    ctx.lineTo(cx, cy + diamondH);
+    ctx.lineTo(cx - diamondW, cy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function getMatrixOrder(cx, cy) {
+    const nx = clamp(cx / Math.max(1, width), 0, 1);
+    const ny = clamp(1 - cy / Math.max(1, height), 0, 1);
+    return clamp((nx + ny) / 2, 0, 1);
+  }
+
+  function getTileVisibility(order) {
+    const sweep = 0.34;
+    const local = clamp((phaseProgress - order * sweep) / (1 - sweep), 0, 1);
+    return isOpening ? 1 - local : local;
+  }
+
+  function drawMatrixDiamond(cx, cy) {
+    const local = getTileVisibility(getMatrixOrder(cx, cy));
+    if (local <= 0) {
+      return;
+    }
+
+    const eased = isOpening ? Math.pow(local, 2) : 1 - Math.pow(1 - local, 3);
+    drawDiamond(cx, cy, halfW * eased, halfH * eased);
+  }
+
+  for (let row = -2; row < rows; row += 1) {
+    for (let col = -1; col < cols; col += 1) {
+      const cx = col * pitchX + halfW;
+      const cy = row * pitchY + halfH;
+
+      drawMatrixDiamond(cx, cy);
+      drawMatrixDiamond(cx + halfW, cy + halfH);
+    }
+  }
+
+  if (cover > 0.98) {
+    ctx.globalAlpha = clamp((cover - 0.98) / 0.02, 0, 1);
+    ctx.fillStyle = "#02030a";
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  ctx.restore();
 }
 
 function resolveActiveEffect(useEffect) {
@@ -6222,10 +6637,22 @@ function markSideBustedByThreshold(side) {
   if (!side || side.hp > 0) {
     return;
   }
+  const wasBusted = side.busted;
   side.hp = 0;
   side.busted = true;
   side.stopped = true;
+  if (!wasBusted) {
+    triggerSideBustFeedback(side);
+  }
   side.status = "淘汰";
+}
+
+function triggerSideBustFeedback(side) {
+  if (!side || !side.id) {
+    return;
+  }
+  queueBustFlash[side.id] = { startedAt: Date.now() };
+  playExplosionSound();
 }
 
 function applyThresholdDamage(side, amount, label) {
@@ -6312,6 +6739,7 @@ function applyCalmEffectFor(side) {
     slotIndex: side.hp - 1,
     startedAt: Date.now()
   };
+  playRecoverSound();
   side.status = "冷静：阈值 +1";
   return true;
 }
@@ -7319,6 +7747,7 @@ function finishRound(winnerId, message) {
       matchVictoryRewardAt = Date.now() + MATCH_VICTORY_REWARD_DELAY_MS;
     } else {
       matchVictoryRewardAt = 0;
+      openRetryChallengeModal();
     }
     return;
   }
@@ -7442,8 +7871,92 @@ function advanceFromRoundEnd() {
   startRound();
 }
 
+function openRetryChallengeModal() {
+  if (!game || game.matchWinner !== "ai" || modal) {
+    return;
+  }
+
+  retryChallengeAdPending = false;
+  openModal({
+    type: "retryChallenge",
+    title: "是否再次挑战？"
+  });
+}
+
+function retryCurrentChallengeAfterAd() {
+  ensureRunState();
+  runState.adRetryRemaining = Math.max(0, (runState.adRetryRemaining || 0) - 1);
+  retryChallengeAdPending = false;
+  modal = null;
+  modalStack = [];
+  buttons = {};
+
+  if (!currentBattleConfig) {
+    startGame();
+    return;
+  }
+
+  startBattle(
+    currentBattleConfig.opponentName,
+    currentBattleConfig.aiDeckOverride,
+    currentBattleConfig.opponentLinesExplicit,
+    currentBattleConfig.aiStyleExplicit
+  );
+}
+
+function watchAdToRetryChallenge() {
+  if (retryChallengeAdPending) {
+    return;
+  }
+
+  ensureRunState();
+  if ((runState.adRetryRemaining || 0) <= 0) {
+    showTip("本局看视频复活次数已用完", 1800);
+    return;
+  }
+
+  if (!window.adManager || typeof window.adManager.showRewardedVideo !== "function") {
+    showTip("广告暂不可用，请稍后再试", 1800);
+    return;
+  }
+
+  retryChallengeAdPending = true;
+  window.adManager.onReward(function () {
+    retryCurrentChallengeAfterAd();
+  });
+  if (typeof window.adManager.onClose === "function") {
+    window.adManager.onClose(function (res) {
+      if (!res || !res.isEnded) {
+        retryChallengeAdPending = false;
+        showTip("需要完整观看广告才可再次挑战", 1800);
+      }
+    });
+  }
+
+  const shown = window.adManager.showRewardedVideo();
+  if (!shown) {
+    retryChallengeAdPending = false;
+    showTip("广告暂不可用，请稍后再试", 1800);
+  }
+}
+
+function leaveFailedChallenge() {
+  beginSceneTransition(function () {
+    ensureRunState();
+    runState.endingResult = "failure";
+    retryChallengeAdPending = false;
+    modal = null;
+    modalStack = [];
+    buttons = {};
+    currentBattleConfig = null;
+    game = null;
+    scene = "runSettlement";
+    showTip("遗憾离场", 1600);
+  });
+}
+
 function getVictoryRewardNodeType() {
-  const node = getCurrentRouteNode();
+  const node = getActiveRouteNode();
   if (node && (node.type === ROUTE_NODE_NORMAL || node.type === ROUTE_NODE_ELITE || node.type === ROUTE_NODE_BOSS)) {
     return node.type;
   }
@@ -7528,6 +8041,8 @@ function openVictoryRewardModal() {
     claimedGold: false,
     claimedCard: false,
     cardPickOpen: false,
+    cardRerollsRemaining: VICTORY_REWARD_AD_REROLL_LIMIT,
+    cardRerollAdPending: false,
     pendingContinueConfirm: false
   };
 }
@@ -7539,7 +8054,7 @@ function claimVictoryGoldReward() {
   }
 
   const amount = Math.max(0, modal.goldReward | 0);
-  runState.gold += amount;
+  addRunGold(amount);
   modal.claimedGold = true;
   showTip("获得 " + amount + " 金币", 2200);
 }
@@ -7556,7 +8071,7 @@ function chooseVictoryCardReward(index) {
   }
 
   const card = cloneCard(choice);
-  runState.deck.push(card);
+  addRunCard(card);
   modal.claimedCard = true;
   modal.cardPickOpen = false;
   startVictoryCardRewardFlight(card, index);
@@ -7605,10 +8120,65 @@ function skipVictoryCardReward() {
     return;
   }
 
-  runState.gold += VICTORY_REWARD_SKIP_CARD_GOLD;
+  addRunGold(VICTORY_REWARD_SKIP_CARD_GOLD);
   modal.claimedCard = true;
   modal.cardPickOpen = false;
   showTip("跳过卡牌，获得 " + VICTORY_REWARD_SKIP_CARD_GOLD + " 金币", 2200);
+}
+
+function rerollVictoryRewardCardsAfterAd() {
+  if (!modal || modal.type !== "victoryRewards" || modal.claimedCard) {
+    return;
+  }
+
+  modal.cardRerollAdPending = false;
+  modal.cardRerollsRemaining = Math.max(0, (modal.cardRerollsRemaining || 0) - 1);
+  modal.cardChoices = generateCardChoices(VICTORY_REWARD_CARD_COUNT, modal.nodeType || getVictoryRewardNodeType());
+  modalCardHitAreas = [];
+  rewardCardButtonHitAreas = [];
+  buttons = {};
+  showTip("已重新随机卡牌奖励", 1800);
+}
+
+function watchAdToRerollVictoryRewardCards() {
+  if (!modal || modal.type !== "victoryRewards" || modal.claimedCard || !modal.cardPickOpen) {
+    return;
+  }
+
+  if (modal.cardRerollAdPending) {
+    return;
+  }
+
+  if ((modal.cardRerollsRemaining || 0) <= 0) {
+    showTip("本次奖励重新随机次数已用完", 1800);
+    return;
+  }
+
+  if (!window.adManager || typeof window.adManager.showRewardedVideo !== "function") {
+    showTip("广告暂不可用，请稍后再试", 1800);
+    return;
+  }
+
+  modal.cardRerollAdPending = true;
+  window.adManager.onReward(function () {
+    rerollVictoryRewardCardsAfterAd();
+  });
+  if (typeof window.adManager.onClose === "function") {
+    window.adManager.onClose(function (res) {
+      if (!res || !res.isEnded) {
+        if (modal && modal.type === "victoryRewards") {
+          modal.cardRerollAdPending = false;
+        }
+        showTip("需要完整观看广告才可重新随机", 1800);
+      }
+    });
+  }
+
+  const shown = window.adManager.showRewardedVideo();
+  if (!shown) {
+    modal.cardRerollAdPending = false;
+    showTip("广告暂不可用，请稍后再试", 1800);
+  }
 }
 
 function continueVictoryRewards() {
@@ -7617,6 +8187,7 @@ function continueVictoryRewards() {
     return;
   }
 
+  commitSelectedRouteNodeVisit();
   runState.battlesWon += 1;
 
   const currentNodeAfterWin = getCurrentRouteNode();
@@ -7678,7 +8249,7 @@ function beginBossBombRewardFlight() {
 function completeBossBombReward() {
   ensureRunState();
   const card = modal && modal.type === "bossBombReward" && modal.card ? modal.card : cloneFirstBombCardFromCatalog();
-  runState.deck.push(card);
+  addRunCard(card);
   showTip("新的炸弹已加入你的牌组", 2200);
   bossBombRewardFlight = null;
   modal = null;
@@ -7746,6 +8317,10 @@ function generateCardChoices(count, nodeType) {
 }
 
 function enterBackstage() {
+  beginSceneTransition(enterBackstageImmediate);
+}
+
+function enterBackstageImmediate() {
   ensureRunState();
   runState.shopRefreshNextCost = SHOP_REFRESH_FIRST_COST;
   runState.shopCards = generateShopCards(SHOP_CARD_COUNT);
@@ -7757,15 +8332,36 @@ function enterBackstage() {
 }
 
 function enterRouteMap() {
+  commitSelectedRouteNodeVisit();
+
+  if (routeEventExitWithoutTransition) {
+    routeEventExitWithoutTransition = false;
+    enterRouteMapImmediate();
+    return;
+  }
+
+  beginSceneTransition(enterRouteMapImmediate);
+}
+
+function enterRouteMapImmediate() {
   ensureRunState();
+  commitSelectedRouteNodeVisit();
   scene = "routeMap";
-  routeMapEnteredAt = Date.now();
+  routeMapEnteredAt = getRouteMapRevealStartTime();
   modal = null;
   modalStack = [];
   buttons = {};
   shopCardHitAreas = [];
   shopBuyButtonHitAreas = [];
   routeNodeHitAreas = [];
+}
+
+function getRouteMapRevealStartTime() {
+  if (sceneTransition) {
+    return getSceneTransitionEndTime();
+  }
+
+  return Date.now();
 }
 
 function getShopRefreshNextCost() {
@@ -7839,7 +8435,7 @@ function buyShopCard(index) {
   if (item.catalogId != null && typeof item.catalogId === "number" && !isNaN(item.catalogId)) {
     bought.catalogId = item.catalogId;
   }
-  runState.deck.push(bought);
+  addRunCard(bought);
   showTip("购买成功：" + getCardName(item.card));
 }
 
@@ -7931,6 +8527,10 @@ function chooseOpponent(index) {
 }
 
 function enterCardCatalog() {
+  beginSceneTransition(enterCardCatalogImmediate);
+}
+
+function enterCardCatalogImmediate() {
   scene = "cardCatalog";
   modal = null;
   modalStack = [];
@@ -7944,13 +8544,12 @@ function enterCardCatalog() {
 
 function handleCardCatalogTouch(point) {
   if (hitButton(point, buttons.cardCatalogBack)) {
-    scene = "title";
-    cardCatalogDrag = null;
+    beginSceneTransition(function () {
+      scene = "title";
+      cardCatalogDrag = null;
+      buttons = {};
+    });
     return;
-  }
-
-  if (cardCatalogScrollArea && hitButton(point, cardCatalogScrollArea)) {
-    startCardCatalogDrag(point);
   }
 }
 
@@ -8035,6 +8634,11 @@ function canPlayerAct() {
 function triggerDrawEffect(side, card, options) {
   if (!card) {
     return;
+  }
+
+  if (!card.roundPlayCardSoundPlayed) {
+    card.roundPlayCardSoundPlayed = true;
+    playPlayCardSound();
   }
 
   const qi = side.queue.indexOf(card);
@@ -8163,7 +8767,50 @@ function hitButton(point, button) {
     return false;
   }
 
-  return point.x >= button.x && point.x <= button.x + button.w && point.y >= button.y && point.y <= button.y + button.h;
+  const isHit = point.x >= button.x && point.x <= button.x + button.w && point.y >= button.y && point.y <= button.y + button.h;
+  if (isHit && isButtonClickSoundTarget(button)) {
+    playButtonClickSoundOnceForTouch();
+  }
+  return isHit;
+}
+
+function isButtonClickSoundTarget(button) {
+  if (!button || button.clickSound === false) {
+    return false;
+  }
+
+  if (button.clickSound === true) {
+    return true;
+  }
+
+  if (!buttons) {
+    return false;
+  }
+
+  return Object.keys(buttons).some(function (key) {
+    return buttons[key] === button;
+  });
+}
+
+function isCanvasButtonPressed(rect, enabled) {
+  return enabled !== false && buttonPressPoint && hitRawRect(buttonPressPoint, rect);
+}
+
+function hitRawRect(point, rect) {
+  return !!point && !!rect && point.x >= rect.x && point.x <= rect.x + rect.w && point.y >= rect.y && point.y <= rect.y + rect.h;
+}
+
+function beginButtonPressDraw(rect, enabled) {
+  ctx.save();
+  if (isCanvasButtonPressed(rect, enabled)) {
+    ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+    ctx.scale(1.1, 1.1);
+    ctx.translate(-(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
+  }
+}
+
+function endButtonPressDraw() {
+  ctx.restore();
 }
 
 function hitRouteNode(point, area) {
@@ -8173,6 +8820,12 @@ function hitRouteNode(point, area) {
   const dx = Math.abs(point.x - area.cx) / area.rx;
   const dy = Math.abs(point.y - area.cy) / area.ry;
   return dx + dy <= 1;
+}
+
+function getRouteNodeHit(point) {
+  return routeNodeHitAreas.find(function (area) {
+    return hitRouteNode(point, area);
+  }) || null;
 }
 
 function getCanvasPoint(event) {
@@ -8192,10 +8845,399 @@ function getCanvasPoint(event) {
   };
 }
 
-function handleTouch(event) {
+function createBgmAudio() {
+  if (typeof tap !== "undefined" && typeof tap.createInnerAudioContext === "function") {
+    const audio = tap.createInnerAudioContext();
+    audio.src = BGM_AUDIO_SRC;
+    audio.loop = true;
+    audio.volume = 0.32;
+    return audio;
+  }
+
+  if (typeof Audio !== "undefined") {
+    const audio = new Audio(BGM_AUDIO_SRC);
+    audio.loop = true;
+    audio.volume = 0.32;
+    audio.preload = "auto";
+    return audio;
+  }
+
+  return null;
+}
+
+function startBgmOnce() {
+  if (bgmStarted) {
+    return;
+  }
+
+  if (!bgmAudio) {
+    bgmAudio = createBgmAudio();
+  }
+
+  if (!bgmAudio || typeof bgmAudio.play !== "function") {
+    return;
+  }
+
+  bgmStarted = true;
+  const playResult = bgmAudio.play();
+  if (playResult && typeof playResult.catch === "function") {
+    playResult.catch(function () {
+      bgmStarted = false;
+    });
+  }
+}
+
+function createButtonClickAudio() {
+  if (typeof tap !== "undefined" && typeof tap.createInnerAudioContext === "function") {
+    const audio = tap.createInnerAudioContext();
+    audio.src = BUTTON_CLICK_AUDIO_SRC;
+    audio.loop = false;
+    audio.volume = 0.72;
+    return audio;
+  }
+
+  if (typeof Audio !== "undefined") {
+    const audio = new Audio(BUTTON_CLICK_AUDIO_SRC);
+    audio.loop = false;
+    audio.volume = 0.72;
+    audio.preload = "auto";
+    return audio;
+  }
+
+  return null;
+}
+
+function getButtonClickAudio() {
+  if (!buttonClickAudios.length) {
+    for (let i = 0; i < BUTTON_CLICK_AUDIO_POOL_SIZE; i += 1) {
+      const audio = createButtonClickAudio();
+      if (audio) {
+        buttonClickAudios.push(audio);
+      }
+    }
+  }
+
+  if (!buttonClickAudios.length) {
+    return null;
+  }
+
+  const audio = buttonClickAudios[buttonClickAudioIndex % buttonClickAudios.length];
+  buttonClickAudioIndex += 1;
+  return audio;
+}
+
+function restartButtonClickAudio(audio) {
+  if (!audio) {
+    return;
+  }
+
+  try {
+    if (typeof audio.stop === "function") {
+      audio.stop();
+    } else if (typeof audio.pause === "function") {
+      audio.pause();
+    }
+
+    if (typeof audio.seek === "function") {
+      audio.seek(0);
+    } else if (typeof audio.currentTime === "number") {
+      audio.currentTime = 0;
+    }
+  } catch (err) {
+    // Some runtimes disallow seeking before metadata is ready; playing still works.
+  }
+
+  try {
+    const playResult = audio.play();
+    if (playResult && typeof playResult.catch === "function") {
+      playResult.catch(function () {});
+    }
+  } catch (err) {
+    // Audio playback can be blocked outside a user gesture; ignore and keep input responsive.
+  }
+}
+
+function playButtonClickSound() {
+  restartButtonClickAudio(getButtonClickAudio());
+}
+
+function createRouteClickAudio() {
+  if (typeof tap !== "undefined" && typeof tap.createInnerAudioContext === "function") {
+    const audio = tap.createInnerAudioContext();
+    audio.src = ROUTE_CLICK_AUDIO_SRC;
+    audio.loop = false;
+    audio.volume = 0.78;
+    return audio;
+  }
+
+  if (typeof Audio !== "undefined") {
+    const audio = new Audio(ROUTE_CLICK_AUDIO_SRC);
+    audio.loop = false;
+    audio.volume = 0.78;
+    audio.preload = "auto";
+    return audio;
+  }
+
+  return null;
+}
+
+function getRouteClickAudio() {
+  if (!routeClickAudios.length) {
+    for (let i = 0; i < ROUTE_CLICK_AUDIO_POOL_SIZE; i += 1) {
+      const audio = createRouteClickAudio();
+      if (audio) {
+        routeClickAudios.push(audio);
+      }
+    }
+  }
+
+  if (!routeClickAudios.length) {
+    return null;
+  }
+
+  const audio = routeClickAudios[routeClickAudioIndex % routeClickAudios.length];
+  routeClickAudioIndex += 1;
+  return audio;
+}
+
+function playRouteClickSound() {
+  restartButtonClickAudio(getRouteClickAudio());
+}
+
+function createPlayCardAudio() {
+  if (typeof tap !== "undefined" && typeof tap.createInnerAudioContext === "function") {
+    const audio = tap.createInnerAudioContext();
+    audio.src = PLAY_CARD_AUDIO_SRC;
+    audio.loop = false;
+    audio.volume = 0.74;
+    return audio;
+  }
+
+  if (typeof Audio !== "undefined") {
+    const audio = new Audio(PLAY_CARD_AUDIO_SRC);
+    audio.loop = false;
+    audio.volume = 0.74;
+    audio.preload = "auto";
+    return audio;
+  }
+
+  return null;
+}
+
+function getPlayCardAudio() {
+  if (!playCardAudios.length) {
+    for (let i = 0; i < PLAY_CARD_AUDIO_POOL_SIZE; i += 1) {
+      const audio = createPlayCardAudio();
+      if (audio) {
+        playCardAudios.push(audio);
+      }
+    }
+  }
+
+  if (!playCardAudios.length) {
+    return null;
+  }
+
+  const audio = playCardAudios[playCardAudioIndex % playCardAudios.length];
+  playCardAudioIndex += 1;
+  return audio;
+}
+
+function playPlayCardSound() {
+  restartButtonClickAudio(getPlayCardAudio());
+}
+
+function createExplosionAudio() {
+  if (typeof tap !== "undefined" && typeof tap.createInnerAudioContext === "function") {
+    const audio = tap.createInnerAudioContext();
+    audio.src = EXPLOSION_AUDIO_SRC;
+    audio.loop = false;
+    audio.volume = 0.82;
+    return audio;
+  }
+
+  if (typeof Audio !== "undefined") {
+    const audio = new Audio(EXPLOSION_AUDIO_SRC);
+    audio.loop = false;
+    audio.volume = 0.82;
+    audio.preload = "auto";
+    return audio;
+  }
+
+  return null;
+}
+
+function getExplosionAudio() {
+  if (!explosionAudios.length) {
+    for (let i = 0; i < EXPLOSION_AUDIO_POOL_SIZE; i += 1) {
+      const audio = createExplosionAudio();
+      if (audio) {
+        explosionAudios.push(audio);
+      }
+    }
+  }
+
+  if (!explosionAudios.length) {
+    return null;
+  }
+
+  const audio = explosionAudios[explosionAudioIndex % explosionAudios.length];
+  explosionAudioIndex += 1;
+  return audio;
+}
+
+function playExplosionSound() {
+  restartButtonClickAudio(getExplosionAudio());
+}
+
+function createRecoverAudio() {
+  if (typeof tap !== "undefined" && typeof tap.createInnerAudioContext === "function") {
+    const audio = tap.createInnerAudioContext();
+    audio.src = RECOVER_AUDIO_SRC;
+    audio.loop = false;
+    audio.volume = 0.78;
+    return audio;
+  }
+
+  if (typeof Audio !== "undefined") {
+    const audio = new Audio(RECOVER_AUDIO_SRC);
+    audio.loop = false;
+    audio.volume = 0.78;
+    audio.preload = "auto";
+    return audio;
+  }
+
+  return null;
+}
+
+function getRecoverAudio() {
+  if (!recoverAudios.length) {
+    for (let i = 0; i < RECOVER_AUDIO_POOL_SIZE; i += 1) {
+      const audio = createRecoverAudio();
+      if (audio) {
+        recoverAudios.push(audio);
+      }
+    }
+  }
+
+  if (!recoverAudios.length) {
+    return null;
+  }
+
+  const audio = recoverAudios[recoverAudioIndex % recoverAudios.length];
+  recoverAudioIndex += 1;
+  return audio;
+}
+
+function playRecoverSound() {
+  restartButtonClickAudio(getRecoverAudio());
+}
+
+function playButtonClickSoundOnceForTouch() {
+  if (buttonClickPlayedForCurrentTouch) {
+    return;
+  }
+
+  buttonClickPlayedForCurrentTouch = true;
+  playButtonClickSound();
+}
+
+function bindDomButtonClickSounds() {
+  if (domButtonClickSoundBound || typeof document === "undefined") {
+    return;
+  }
+
+  domButtonClickSoundBound = true;
+  document.addEventListener(
+    "click",
+    function (event) {
+      const target = event.target && event.target.closest
+        ? event.target.closest("button, [role='button'], input[type='button'], input[type='submit'], [data-click-sound]")
+        : null;
+      if (target && !target.disabled && target.getAttribute("aria-disabled") !== "true") {
+        playButtonClickSound();
+      }
+    },
+    true
+  );
+}
+
+function bindDomButtonPressEffects() {
+  if (domButtonPressEffectBound || typeof document === "undefined") {
+    return;
+  }
+
+  domButtonPressEffectBound = true;
+  const style = document.createElement("style");
+  style.textContent =
+    "button, [role='button'], input[type='button'], input[type='submit'], [data-click-sound] {" +
+    "transform-origin: center center;" +
+    "transition: transform 80ms ease;" +
+    "}" +
+    "button:active, [role='button']:active, input[type='button']:active, input[type='submit']:active, [data-click-sound]:active {" +
+    "transform: scale(1.1);" +
+    "}";
+  document.head.appendChild(style);
+}
+
+function clearButtonPressPoint() {
+  buttonPressPoint = null;
+  routePressNodeId = null;
+}
+
+function handleTouchStart(event) {
+  buttonClickPlayedForCurrentTouch = false;
+  startBgmOnce();
+
+  const point = getCanvasPoint(event);
+  buttonPressPoint = point;
+
+  if (sceneTransition || (modal && modal.closing)) {
+    return;
+  }
+
+  if (modal && pileModalScrollArea && hitRawRect(point, pileModalScrollArea)) {
+    const canDragPileModal =
+      modal.type === "pile" ||
+      modal.type === "removeCard" ||
+      modal.type === "selectHookTarget";
+    if (canDragPileModal) {
+      startPileModalDrag(point);
+      return;
+    }
+  }
+
+  if (scene === "cardCatalog" && !modal && cardCatalogScrollArea && hitRawRect(point, cardCatalogScrollArea)) {
+    startCardCatalogDrag(point);
+    return;
+  }
+
+  if (scene === "runSettlement" && !modal && settlementDeckScrollArea && hitRawRect(point, settlementDeckScrollArea)) {
+    startSettlementDeckDrag(point);
+    return;
+  }
+
+  if (scene === "routeMap" && !modal) {
+    const routeHit = getRouteNodeHit(point);
+    routePressNodeId = routeHit && canSelectRouteNode(routeHit.node) ? routeHit.node.id : null;
+  }
+}
+
+function handleTapRelease(event) {
+  buttonClickPlayedForCurrentTouch = false;
+  startBgmOnce();
+
   const point = getCanvasPoint(event);
 
+  if (sceneTransition) {
+    return;
+  }
+
   if (modal) {
+    if (modal.closing) {
+      return;
+    }
+
     if (modal.type === "activeEffect") {
       if (hitButton(point, buttons.useEffect)) {
         resolveActiveEffect(true);
@@ -8382,7 +9424,6 @@ function handleTouch(event) {
       }
 
       if (pileModalScrollArea && hitButton(point, pileModalScrollArea)) {
-        startPileModalDrag(point);
         return;
       }
 
@@ -8395,7 +9436,20 @@ function handleTouch(event) {
     }
 
     if (modal.type === "cardTip") {
-      closeModal();
+      if (hitButton(point, buttons.closeModal)) {
+        closeModal();
+      }
+      return;
+    }
+
+    if (modal.type === "retryChallenge") {
+      if (hitButton(point, buttons.retryChallengeAd)) {
+        watchAdToRetryChallenge();
+        return;
+      }
+      if (hitButton(point, buttons.retryChallengeLeave)) {
+        leaveFailedChallenge();
+      }
       return;
     }
 
@@ -8440,7 +9494,6 @@ function handleTouch(event) {
       }
 
       if (pileModalScrollArea && hitButton(point, pileModalScrollArea)) {
-        startPileModalDrag(point);
         return;
       }
 
@@ -8479,6 +9532,11 @@ function handleTouch(event) {
       }
 
       if (modal.cardPickOpen) {
+        if (hitButton(point, buttons.rerollCardRewardAd)) {
+          watchAdToRerollVictoryRewardCards();
+          return;
+        }
+
         const rewardButtonHit = rewardCardButtonHitAreas.find(function (area) {
           return hitButton(point, area);
         });
@@ -8533,7 +9591,6 @@ function handleTouch(event) {
       }
 
       if (pileModalScrollArea && hitButton(point, pileModalScrollArea)) {
-        startPileModalDrag(point);
         return;
       }
     }
@@ -8544,10 +9601,13 @@ function handleTouch(event) {
     return;
   }
 
-  if (scene === "runVictory") {
-    if (hitButton(point, buttons.runVictoryOk)) {
-      runState = null;
-      scene = "title";
+  if (scene === "runSettlement") {
+    if (hitButton(point, buttons.runSettlementOk)) {
+      beginSceneTransition(function () {
+        runState = null;
+        scene = "title";
+        buttons = {};
+      });
     }
     return;
   }
@@ -8590,9 +9650,6 @@ function handleTouch(event) {
   }
 
   if (scene === "playing" && game.matchWinner) {
-    if (game.matchWinner === "ai" && hitButton(point, buttons.rematch)) {
-      startGame();
-    }
     return;
   }
 
@@ -8622,7 +9679,20 @@ function startPileModalDrag(point) {
   };
 }
 
+function startSettlementDeckDrag(point) {
+  settlementDeckDrag = {
+    startX: point.x,
+    startY: point.y,
+    lastY: point.y,
+    moved: false
+  };
+}
+
 function handlePointerMove(event) {
+  if (buttonPressPoint) {
+    buttonPressPoint = getCanvasPoint(event);
+  }
+
   if (pileModalDrag && modal && (modal.type === "pile" || modal.type === "removeCard") && pileModalScrollArea) {
     const point = getCanvasPoint(event);
     const dy = point.y - pileModalDrag.lastY;
@@ -8632,6 +9702,20 @@ function handlePointerMove(event) {
     pileModalDrag.lastY = point.y;
     scrollPileModalBy(-dy);
 
+    if (event.preventDefault) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (settlementDeckDrag && scene === "runSettlement" && !modal && settlementDeckScrollArea) {
+    const point = getCanvasPoint(event);
+    const dy = point.y - settlementDeckDrag.lastY;
+    if (Math.abs(point.y - settlementDeckDrag.startY) > 4 || Math.abs(point.x - settlementDeckDrag.startX) > 4) {
+      settlementDeckDrag.moved = true;
+    }
+    settlementDeckDrag.lastY = point.y;
+    scrollSettlementDeckBy(-dy);
     if (event.preventDefault) {
       event.preventDefault();
     }
@@ -8660,16 +9744,17 @@ function handlePointerEnd(event) {
     const wasMoved = pileModalDrag.moved;
     pileModalDrag = null;
 
-    if (!wasMoved) {
+    if (!wasMoved && modal.type === "pile") {
       const modalCardHit = modalCardHitAreas.find(function (area) {
         return hitButton(point, area);
       });
 
-      if (modalCardHit && modal.type === "pile") {
+      if (modalCardHit) {
         openCardTipModal(modalCardHit.card);
+        return true;
       }
     }
-    return;
+    return wasMoved || modal.type === "pile";
   }
 
   pileModalDrag = null;
@@ -8688,10 +9773,34 @@ function handlePointerEnd(event) {
         openCardTipModal(catalogHit.card);
       }
     }
-    return;
+    return true;
   }
 
   cardCatalogDrag = null;
+
+  if (settlementDeckDrag && scene === "runSettlement" && !modal) {
+    const wasMoved = settlementDeckDrag.moved;
+    settlementDeckDrag = null;
+    return wasMoved;
+  }
+
+  settlementDeckDrag = null;
+  return false;
+}
+
+function handleTouchEnd(event) {
+  const dragHandled = handlePointerEnd(event);
+  if (!dragHandled) {
+    handleTapRelease(event);
+  }
+  clearButtonPressPoint();
+}
+
+function handleTouchCancel() {
+  pileModalDrag = null;
+  cardCatalogDrag = null;
+  settlementDeckDrag = null;
+  clearButtonPressPoint();
 }
 
 function handleWheel(event) {
@@ -8709,6 +9818,17 @@ function handleWheel(event) {
   }
 
   if (scene !== "cardCatalog" || modal || !cardCatalogScrollArea) {
+    if (scene === "runSettlement" && !modal && settlementDeckScrollArea) {
+      const point = getCanvasPoint(event);
+      if (!hitButton(point, settlementDeckScrollArea)) {
+        return;
+      }
+
+      scrollSettlementDeckBy(event.deltaY || 0);
+      if (event.preventDefault) {
+        event.preventDefault();
+      }
+    }
     return;
   }
 
@@ -8721,6 +9841,13 @@ function handleWheel(event) {
   if (event.preventDefault) {
     event.preventDefault();
   }
+}
+
+function scrollSettlementDeckBy(deltaY) {
+  if (!settlementDeckScrollArea) {
+    return;
+  }
+  settlementDeckScrollY = clamp(settlementDeckScrollY + deltaY, 0, settlementDeckScrollArea.maxScroll || 0);
 }
 
 function scrollPileModalBy(deltaY) {
@@ -8774,14 +9901,17 @@ function handleRouteMapTouch(point) {
     return;
   }
 
-  const hit = routeNodeHitAreas.find(function (area) {
-    return hitRouteNode(point, area);
-  });
+  const hit = getRouteNodeHit(point);
 
   if (!hit) {
     return;
   }
 
+  if (routePressNodeId !== hit.node.id) {
+    return;
+  }
+
+  playRouteClickSound();
   selectRouteNode(hit.node);
 }
 
@@ -8839,6 +9969,10 @@ function update(frameNow) {
   pruneEffects(now);
   updateTips(now);
 
+  if (updateSceneTransition(now)) {
+    return;
+  }
+
   if (scene === "playing" && tickBruiserDrawMachine(now)) {
     return;
   }
@@ -8875,6 +10009,9 @@ function update(frameNow) {
   }
 
   if (scene === "playing" && game.matchWinner) {
+    if (game.matchWinner === "ai" && !modal) {
+      openRetryChallengeModal();
+    }
     return;
   }
 
@@ -9147,7 +10284,7 @@ function drawTitleStartButton(rect, enabled) {
   fill.addColorStop(0.52, enabled ? "#1fe0d0" : "#3b3f52");
   fill.addColorStop(1, enabled ? "#f05d8f" : "#2a2f3f");
 
-  ctx.save();
+  beginButtonPressDraw(rect, enabled);
   ctx.shadowColor = glow;
   ctx.shadowBlur = enabled ? 18 : 7;
   ctx.shadowOffsetY = 4;
@@ -9161,8 +10298,8 @@ function drawTitleStartButton(rect, enabled) {
   ctx.lineWidth = 1;
   roundRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 5, false, true);
 
-  drawCenteredText(enabled ? "开始博弈" : "读取牌局", rect.x + rect.w / 2, rect.y + rect.h / 2 + 6, 15, enabled ? "#020306" : "rgba(244, 247, 255, 0.58)", "bold");
-  ctx.restore();
+  drawCenteredText(enabled ? "开始游戏" : "读取牌局", rect.x + rect.w / 2, rect.y + rect.h / 2 + 6, 15, enabled ? "#020306" : "rgba(244, 247, 255, 0.58)", "bold");
+  endButtonPressDraw();
 }
 
 function drawTitleCatalogButton(rect, enabled) {
@@ -9170,7 +10307,7 @@ function drawTitleCatalogButton(rect, enabled) {
   fill.addColorStop(0, enabled ? "rgba(18, 58, 63, 0.96)" : "#242839");
   fill.addColorStop(1, enabled ? "rgba(35, 91, 91, 0.96)" : "#2a2f3f");
 
-  ctx.save();
+  beginButtonPressDraw(rect, enabled);
   ctx.shadowColor = enabled ? "rgba(94, 231, 255, 0.32)" : "rgba(59, 63, 82, 0.32)";
   ctx.shadowBlur = enabled ? 12 : 5;
   ctx.shadowOffsetY = 3;
@@ -9183,35 +10320,44 @@ function drawTitleCatalogButton(rect, enabled) {
   ctx.lineWidth = 1;
   roundRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 5, false, true);
   drawCenteredText("卡牌图鉴", rect.x + rect.w / 2, rect.y + rect.h / 2 + 6, 15, enabled ? "#e8fffb" : "rgba(244, 247, 255, 0.52)", "bold");
-  ctx.restore();
+  endButtonPressDraw();
 }
 
 function getCardCatalogLayout(width, height) {
   const columns = 5;
   const gap = 12;
+  const frame = getBattleLayoutFrame(width, height);
   const panelW = Math.min(width - 28, 430);
-  const panelH = Math.min(height - 32, 680);
+  const panelH = Math.max(0, frame.h - 32);
   const panel = {
     x: (width - panelW) / 2,
-    y: Math.max(16, (height - panelH) / 2),
+    y: frame.y + Math.max(16, (frame.h - panelH) / 2),
     w: panelW,
     h: panelH
   };
   const padX = Math.max(14, Math.min(22, panel.w * 0.052));
   const headerH = 96;
-  const footerH = 56;
+  const backButton = {
+    x: panel.x + panel.w / 2 - 62,
+    y: panel.y + panel.h - 48,
+    w: 124,
+    h: 34
+  };
+  const footerGap = 14;
   const gridW = panel.w - padX * 2;
   const cardS = Math.max(42, Math.min(62, Math.floor((gridW - gap * (columns - 1)) / columns)));
   const rowH = cardS + gap;
+  const scrollBottom = backButton.y - footerGap;
   const scrollArea = {
     x: panel.x + (panel.w - (cardS * columns + gap * (columns - 1))) / 2,
     y: panel.y + headerH,
     w: cardS * columns + gap * (columns - 1),
-    h: Math.max(rowH, panel.h - headerH - footerH)
+    h: Math.max(rowH, scrollBottom - (panel.y + headerH))
   };
 
   return {
     panel: panel,
+    backButton: backButton,
     scrollArea: scrollArea,
     columns: columns,
     gap: gap,
@@ -9255,7 +10401,7 @@ function drawCardCatalog(width, height) {
   drawCenteredText("携带卡牌通关可解锁对应图鉴", panel.x + panel.w / 2, panel.y + 77, 12, THEME.muted, "normal");
   ctx.restore();
 
-  buttons.cardCatalogBack = { x: panel.x + panel.w / 2 - 62, y: panel.y + panel.h - 44, w: 124, h: 34 };
+  buttons.cardCatalogBack = layout.backButton;
   ctx.save();
   ctx.globalAlpha = intro;
   drawBattleActionButton(buttons.cardCatalogBack, "返回主菜单", "hold", true);
@@ -9419,6 +10565,7 @@ function drawVictoryRewardPanel(panel) {
 function drawVictoryRewardListItem(rect, title, claimed) {
   const fill = claimed ? "rgba(38, 43, 59, 0.68)" : "rgba(14, 24, 42, 0.86)";
   const edge = claimed ? "rgba(143, 155, 181, 0.22)" : "rgba(94, 231, 255, 0.42)";
+  beginButtonPressDraw(rect, !claimed);
   ctx.fillStyle = fill;
   ctx.strokeStyle = edge;
   ctx.lineWidth = 1;
@@ -9429,13 +10576,14 @@ function drawVictoryRewardListItem(rect, title, claimed) {
   if (claimed) {
     drawText("已领取", rect.x + rect.w - 66, rect.y + rect.h / 2 + 5, 12, THEME.muted, "bold");
   }
+  endButtonPressDraw();
 }
 
 function drawVictoryCardPickModal(width, height) {
   drawRunBottomBar(width, height);
 
   const panelW = clamp(Math.min(356, width - 28), 278, width - 20);
-  const panelH = 374;
+  const panelH = 420;
   const panel = {
     x: (width - panelW) / 2,
     y: Math.max(38, (height - panelH) / 2),
@@ -9445,15 +10593,23 @@ function drawVictoryCardPickModal(width, height) {
   drawVictoryRewardPanel(panel);
   drawCenteredText("获得卡牌", panel.x + panel.w / 2, panel.y + 36, 22, THEME.text, "bold");
   drawCenteredText("选择 1 张加入牌库", panel.x + panel.w / 2, panel.y + 60, 12, THEME.muted, "normal");
+  buttons.rerollCardRewardAd = { x: panel.x + 20, y: panel.y + panel.h - 108, w: panel.w - 40, h: 40 };
   buttons.skipCardReward = { x: panel.x + 20, y: panel.y + panel.h - 58, w: panel.w - 40, h: 42 };
   drawVictoryRewardCardChoices(
     modal.cardChoices || [],
     panel.x + 16,
     panel.y + 88,
     panel.w - 32,
-    buttons.skipCardReward.y - panel.y - 102,
+    buttons.rerollCardRewardAd.y - panel.y - 102,
     width,
     height
+  );
+  const rerollsLeft = Math.max(0, modal.cardRerollsRemaining || 0);
+  const canReroll = rerollsLeft > 0 && !modal.cardRerollAdPending && !modal.claimedCard;
+  drawAdRetryButton(
+    buttons.rerollCardRewardAd,
+    modal.cardRerollAdPending ? "广告播放中" : rerollsLeft > 0 ? "重新随机 " + rerollsLeft + "/" + VICTORY_REWARD_AD_REROLL_LIMIT : "重新随机已用完",
+    canReroll
   );
   drawButton(buttons.skipCardReward, "跳过 +2金币", THEME.buttonStop, "#061d1b", true);
 }
@@ -9482,7 +10638,7 @@ function drawVictoryRewardCardChoices(cards, x, y, width, height, viewportWidth,
     const cardY = startY;
     const btn = { x: cardX - 4, y: cardY + cardS + btnGap, w: cardS + 8, h: btnH };
     modalCardHitAreas.push({ x: cardX, y: cardY, w: cardS, h: cardS, card: card, index: index });
-    rewardCardButtonHitAreas.push(Object.assign({ index: index }, btn));
+    rewardCardButtonHitAreas.push(Object.assign({ index: index, clickSound: true }, btn));
     drawMiniCard(card, cardX, cardY, cardS, cardS);
     drawButton(btn, "选择", THEME.button, "#120613", true);
   });
@@ -9773,7 +10929,7 @@ function drawBackstage(width, height) {
   buttons.leaveBackstage = { x: panel.x + 20, y: leaveY, w: innerW, h: btnH };
   drawBlackMarketButton(buttons.shopRefresh, "刷新 " + refreshCost + " 金币", "hot", refreshOk);
   drawBlackMarketButton(buttons.removeCard, "删牌 " + getRemoveCardCost() + " 金币", "hot", canRemoveRunCard());
-  drawBlackMarketButton(buttons.leaveBackstage, "返回路线", "cool", true);
+  drawBlackMarketButton(buttons.leaveBackstage, "离开黑市", "cool", true);
   drawRunBottomBar(width, height);
 }
 
@@ -9857,7 +11013,7 @@ function drawShopTile(tile, item, index, viewportWidth, viewportHeight) {
     w: tile.w - pad * 2,
     h: btnH
   };
-  shopBuyButtonHitAreas.push(Object.assign({ index: index }, buyRect));
+  shopBuyButtonHitAreas.push(Object.assign({ index: index, clickSound: true }, buyRect));
   drawBlackMarketButton(buyRect, sold ? "已购入" : item.cost + " 金币", sold ? "disabled" : "gold", !sold);
 
   if (sold) {
@@ -9881,55 +11037,136 @@ function drawBlackMarketActionDock(x, y, w, h) {
 }
 
 function drawBlackMarketButton(rect, label, tone, enabled) {
-  let fillA = "rgba(47, 56, 69, 0.96)";
-  let fillB = "rgba(27, 34, 45, 0.98)";
-  let edge = "rgba(170, 181, 202, 0.28)";
-  let textColor = THEME.text;
+  drawBattleActionButton(rect, label, tone === "cool" ? "hold" : tone === "gold" ? "gold" : "aggressive", enabled);
+}
 
-  if (tone === "cool") {
-    fillA = "rgba(35, 91, 91, 0.96)";
-    fillB = "rgba(18, 58, 63, 0.98)";
-    edge = "rgba(94, 231, 255, 0.38)";
-    textColor = "#e8fffb";
-  } else if (tone === "gold") {
-    fillA = "rgba(178, 142, 64, 0.78)";
-    fillB = "rgba(116, 82, 36, 0.86)";
-    edge = "rgba(255, 224, 113, 0.32)";
-    textColor = "#fff0b8";
-  } else if (tone === "disabled" || !enabled) {
-    fillA = "rgba(42, 47, 59, 0.9)";
-    fillB = "rgba(28, 33, 43, 0.92)";
-    edge = "rgba(143, 155, 181, 0.28)";
-    textColor = "rgba(244, 247, 255, 0.5)";
-  }
+function drawRunSettlement(width, height) {
+  buttons = {};
+  drawBackground(width, height);
+  ensureRunState();
+  const stats = ensureRunStats() || { goldGained: 0, cardsGained: 0, highestScore: 0 };
+  const isVictory = runState.endingResult !== "failure";
+  const title = isVictory ? "远征通关" : "游戏失败";
+  const subtitle = isVictory
+    ? "你击败了第三轮庄家，带着战利品凯旋。"
+    : "你在本次游戏中遗憾离场。";
+  const frame = getRunLayoutFrame(width, height);
+  const panelW = Math.min(frame.w - 28, 380);
+  const panelH = Math.min(frame.h - 44, 570);
+  const panel = {
+    x: frame.x + (frame.w - panelW) / 2,
+    y: frame.y + Math.max(18, (frame.h - panelH) / 2),
+    w: panelW,
+    h: panelH
+  };
 
   ctx.save();
-  const g = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
-  g.addColorStop(0, fillA);
-  g.addColorStop(1, fillB);
-  ctx.shadowColor = "rgba(0, 0, 0, 0.36)";
-  ctx.shadowBlur = enabled ? 5 : 2;
-  ctx.shadowOffsetY = 2;
-  ctx.fillStyle = g;
-  ctx.strokeStyle = edge;
-  ctx.lineWidth = 1.2;
-  roundRect(rect.x, rect.y, rect.w, rect.h, 7, true, true);
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+  const glow = ctx.createRadialGradient(width / 2, panel.y + 80, 20, width / 2, panel.y + 80, Math.max(width, height) * 0.45);
+  glow.addColorStop(0, isVictory ? "rgba(255, 224, 113, 0.18)" : "rgba(240, 93, 143, 0.16)");
+  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+
+  drawDeckViewerPanel(panel);
+  drawCenteredText(title, panel.x + panel.w / 2, panel.y + 42, 28, isVictory ? THEME.gold : THEME.danger, "bold");
+  drawCenteredText(subtitle, panel.x + panel.w / 2, panel.y + 74, 13, THEME.muted, "normal");
+
+  const statsTop = panel.y + 96;
+  const statGap = 8;
+  const statW = (panel.w - 36 - statGap * 2) / 3;
+  drawSettlementStatCard(panel.x + 18, statsTop, statW, 58, "获得金币", stats.goldGained);
+  drawSettlementStatCard(panel.x + 18 + (statW + statGap), statsTop, statW, 58, "获得卡牌", stats.cardsGained);
+  drawSettlementStatCard(panel.x + 18 + (statW + statGap) * 2, statsTop, statW, 58, "单局最高分", stats.highestScore);
+
+  const deckTitleY = statsTop + 88;
+  const sortedDeck = sortCardsForDeckViewerDisplay(runState.deck);
+  const deckArea = {
+    x: panel.x + 18,
+    y: deckTitleY,
+    w: panel.w - 36,
+    h: Math.max(120, panel.y + panel.h - deckTitleY - 98)
+  };
+  drawSettlementDeckPreview(sortedDeck, deckArea, width, height);
+
+  buttons.runSettlementOk = { x: panel.x + 32, y: panel.y + panel.h - 60, w: panel.w - 64, h: 44 };
+  drawBattleActionButton(buttons.runSettlementOk, "返回主界面", "hold", true);
+}
+
+function drawSettlementStatCard(x, y, w, h, label, value) {
+  ctx.save();
+  ctx.fillStyle = "rgba(7, 12, 22, 0.78)";
+  ctx.strokeStyle = "rgba(94, 231, 255, 0.24)";
   ctx.lineWidth = 1;
-  roundRect(rect.x + 4, rect.y + 4, rect.w - 8, rect.h - 8, 4, false, true);
-  drawCenteredMiddleText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5, Math.min(14, Math.max(11, rect.h * 0.36)), textColor, "bold");
+  roundRect(x, y, w, h, 7, true, true);
+  drawCenteredText(label, x + w / 2, y + 20, 12, THEME.muted, "bold");
+  drawCenteredText(String(value), x + w / 2, y + 47, 22, THEME.gold, "bold");
   ctx.restore();
 }
 
-function drawRunVictory(width, height) {
-  buttons = {};
-  drawBackground(width, height);
-  drawCenteredText("远征胜利", width / 2, height * 0.3, 30, THEME.gold, "bold");
-  drawCenteredText("你已击败全部 " + RUN_BOSS_ROUNDS + " 名庄家", width / 2, height * 0.4, 17, THEME.text, "normal");
-  drawCenteredText("每次击败庄家后会永久加入 1 张炸弹", width / 2, height * 0.47, 12, THEME.muted, "normal");
-  buttons.runVictoryOk = { x: width * 0.2, y: height * 0.68, w: width * 0.6, h: 50 };
-  drawButton(buttons.runVictoryOk, "返回标题", THEME.buttonStop, "#061d1b", true);
+function drawSettlementDeckPreview(cards, area, viewportWidth, viewportHeight) {
+  const columns = Math.min(5, Math.max(1, cards.length || 1));
+  const rows = Math.max(1, Math.ceil((cards.length || 1) / columns));
+  const gap = 8;
+  const titleSpace = 34;
+  const cardS = Math.max(26, Math.min(54, (area.w - gap * (columns - 1)) / columns));
+  const gridW = columns * cardS + gap * (columns - 1);
+  const gridH = rows * cardS + gap * (rows - 1);
+  const startX = area.x + (area.w - gridW) / 2;
+  const contentArea = {
+    x: area.x,
+    y: area.y + titleSpace,
+    w: area.w,
+    h: Math.max(1, area.h - titleSpace - 10)
+  };
+  const maxScroll = Math.max(0, gridH - contentArea.h);
+  settlementDeckScrollY = clamp(settlementDeckScrollY, 0, maxScroll);
+  settlementDeckScrollArea = Object.assign({ maxScroll: maxScroll }, area);
+  const startY = contentArea.y - settlementDeckScrollY;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(3, 6, 12, 0.34)";
+  ctx.strokeStyle = "rgba(244, 247, 255, 0.08)";
+  roundRect(area.x, area.y, area.w, area.h, 7, true, true);
+  ctx.restore();
+  drawCenteredText("当前卡组（" + cards.length + "）", area.x + area.w / 2, area.y + 24, 12, THEME.muted, "bold");
+
+  if (cards.length === 0) {
+    drawCenteredText("暂无卡牌", area.x + area.w / 2, area.y + titleSpace + (area.h - titleSpace) / 2 + 5, 14, THEME.muted, "normal");
+    return;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(contentArea.x, contentArea.y, contentArea.w, contentArea.h);
+  ctx.clip();
+
+  cards.forEach(function (card, index) {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    const cardY = startY + row * (cardS + gap);
+    if (cardY + cardS < contentArea.y - gap || cardY > contentArea.y + contentArea.h + gap) {
+      return;
+    }
+    drawMiniCard(card, startX + col * (cardS + gap), cardY, cardS, cardS);
+  });
+  ctx.restore();
+
+  if (maxScroll > 0) {
+    drawSettlementDeckScrollbar(contentArea, settlementDeckScrollY, maxScroll);
+  }
+}
+
+function drawSettlementDeckScrollbar(area, scrollY, maxScroll) {
+  const trackH = area.h - 12;
+  const thumbH = Math.max(24, trackH * (area.h / (area.h + maxScroll)));
+  const thumbY = area.y + 6 + (trackH - thumbH) * (maxScroll > 0 ? scrollY / maxScroll : 0);
+  ctx.save();
+  ctx.fillStyle = "rgba(94, 231, 255, 0.12)";
+  roundRect(area.x + area.w - 8, area.y + 6, 3, trackH, 2, true, false);
+  ctx.fillStyle = "rgba(94, 231, 255, 0.48)";
+  roundRect(area.x + area.w - 8, thumbY, 3, thumbH, 2, true, false);
+  ctx.restore();
 }
 
 function drawRouteMap(width, height) {
@@ -10270,6 +11507,7 @@ function drawRouteNode(node, pos, revealProgress) {
   }
   const visited = runState.visitedRouteNodeIds.indexOf(node.id) >= 0;
   const selectable = canSelectRouteNode(node);
+  const pressed = selectable && routePressNodeId === node.id;
   const isBoss = node.type === ROUTE_NODE_BOSS || node.type === ROUTE_NODE_BOSS_BEATEN;
   const accent = isBoss ? "rgba(240, 93, 143, 0.95)" : selectable ? "rgba(94, 231, 255, 0.95)" : "rgba(94, 231, 255, 0.26)";
   const fill = ctx.createLinearGradient(pos.cx - pos.rx, pos.cy - pos.ry, pos.cx + pos.rx, pos.cy + pos.ry);
@@ -10280,7 +11518,9 @@ function drawRouteNode(node, pos, revealProgress) {
   ctx.save();
   ctx.globalAlpha *= Math.min(1, reveal);
   ctx.translate(pos.cx, pos.cy + (1 - Math.min(1, reveal)) * 16);
-  ctx.scale(0.82 + Math.min(1, reveal) * 0.18, 0.82 + Math.min(1, reveal) * 0.18);
+  const revealScale = 0.82 + Math.min(1, reveal) * 0.18;
+  const pressScale = pressed ? 1.1 : 1;
+  ctx.scale(revealScale * pressScale, revealScale * pressScale);
   ctx.translate(-pos.cx, -pos.cy);
   ctx.shadowColor = selectable ? accent : "rgba(0, 0, 0, 0.55)";
   ctx.shadowBlur = selectable ? 18 : 8;
@@ -10384,7 +11624,7 @@ function drawRunBottomBar(width, height, frame) {
   ctx.textAlign = "left";
   drawText("我的金币：" + runState.gold, bar.x + 18, bar.y + 47, 17, "rgba(255, 224, 113, 0.88)", "bold");
 
-  buttons.runDeck = { x: bar.x + bar.w - 82, y: bar.y + 16, w: 64, h: 40 };
+  buttons.runDeck = { x: bar.x + bar.w - 82, y: bar.y + 16, w: 64, h: 40, clickSound: true };
   drawPileButtonFace(buttons.runDeck, "牌库", runState.deck.length, "rgba(94, 231, 255, 0.5)");
 }
 
@@ -10438,8 +11678,8 @@ function drawShopBuyButtons() {
     }
 
     const rect = { x: area.x - 4, y: area.y + area.h + 12, w: area.w + 8, h: btnH };
-    shopBuyButtonHitAreas.push(Object.assign({ index: index }, rect));
-    drawButton(rect, item.bought ? "已购买" : item.cost + " 金币", item.bought ? "#3b3f52" : THEME.button, "#120613", !item.bought);
+    shopBuyButtonHitAreas.push(Object.assign({ index: index, clickSound: true }, rect));
+    drawBlackMarketButton(rect, item.bought ? "已购买" : item.cost + " 金币", item.bought ? "disabled" : "gold", !item.bought);
     if (item.bought) {
       ctx.fillStyle = "rgba(4, 6, 12, 0.58)";
       roundRect(area.x, area.y, area.w, area.h, 6, true, false);
@@ -10448,6 +11688,7 @@ function drawShopBuyButtons() {
 }
 
 function drawOpponentChoice(rect, opponent, index) {
+  beginButtonPressDraw(rect, true);
   ctx.textAlign = "left";
   drawPanel(rect, THEME.panel);
   drawPanelRim(rect, index === 1 ? THEME.panelEdgeCool : THEME.panelEdge);
@@ -10455,6 +11696,7 @@ function drawOpponentChoice(rect, opponent, index) {
   drawText(opponent.name, rect.x + 18, rect.y + 66, 22, THEME.text, "bold");
   drawWrappedText(opponent.description, rect.x + 18, rect.y + 92, rect.w - 36, 13, 18, THEME.muted, "normal");
   drawText("点击选择", rect.x + rect.w - 88, rect.y + rect.h - 22, 12, THEME.gold, "bold");
+  endButtonPressDraw();
 }
 
 function canRemoveRunCard() {
@@ -10498,6 +11740,7 @@ function drawGameSymbol(x, y, size, symbol, color) {
 function drawGame(width, height, frameNow) {
   const now = frameNow != null ? frameNow : Date.now();
   drawBattleBackground(width, height);
+  buttons = {};
   pileHitAreas = [];
   queueCardHitAreas = [];
 
@@ -10508,10 +11751,53 @@ function drawGame(width, height, frameNow) {
   const centerY = aiPanel.y + aiPanel.h + gap;
   const centerH = playerPanel.y - centerY - gap;
 
-  drawSidePanel(game.ai, aiPanel, true, now);
-  drawCenterStatus({ x: layout.frame.x + layout.sideMargin, y: centerY, w: layout.frame.w - layout.sideMargin * 2, h: centerH });
-  drawSidePanel(game.player, playerPanel, false, now);
-  drawControls(width, height);
+  const centerRect = { x: layout.frame.x + layout.sideMargin, y: centerY, w: layout.frame.w - layout.sideMargin * 2, h: centerH };
+  drawBattleEnterPart(aiPanel, now, BATTLE_ENTER_AI_DELAY, -18, function () {
+    drawSidePanel(game.ai, aiPanel, true, now);
+  });
+  drawBattleEnterPart(centerRect, now, BATTLE_ENTER_CENTER_DELAY, 0, function () {
+    drawCenterStatus(centerRect);
+  });
+  drawBattleEnterPart(playerPanel, now, BATTLE_ENTER_PLAYER_DELAY, 18, function () {
+    drawSidePanel(game.player, playerPanel, false, now);
+  });
+  drawBattleEnterPart({ x: 0, y: height * 0.72, w: width, h: height * 0.28 }, now, BATTLE_ENTER_CONTROLS_DELAY, 18, function () {
+    drawControls(width, height, true);
+  });
+}
+
+function getBattleEnterProgress(now, delayMs) {
+  if (!battleEnteredAt) {
+    return 1;
+  }
+
+  const elapsed = (now != null ? now : Date.now()) - battleEnteredAt - Math.max(0, delayMs || 0);
+  if (elapsed <= 0) {
+    return 0;
+  }
+
+  return clamp(elapsed / BATTLE_ENTER_ANIM_DURATION, 0, 1);
+}
+
+function drawBattleEnterPart(rect, now, delayMs, offsetY, drawFn) {
+  const progress = getBattleEnterProgress(now, delayMs);
+  if (progress <= 0) {
+    return;
+  }
+
+  const eased = easeOutBack(progress);
+  const alpha = clamp(progress * 1.18, 0, 1);
+  const scaleX = 0.985 + Math.min(1.05, eased) * 0.015;
+  const scaleY = 0.92 + Math.min(1.08, eased) * 0.08;
+  const dy = (1 - clamp(eased, 0, 1)) * (offsetY || 0);
+
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2 + dy);
+  ctx.scale(scaleX, scaleY);
+  ctx.translate(-(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
+  drawFn();
+  ctx.restore();
 }
 
 function drawBattleBackground(width, height) {
@@ -10726,6 +12012,9 @@ function drawOpponentSpeechBubbleOverlay(screenW, screenH) {
   }
 
   const startedAt = typeof bub.startedAt === "number" ? bub.startedAt : now;
+  if (now < startedAt) {
+    return;
+  }
   const age = now - startedAt;
   const timeLeft = bub.until - now;
   const tOut = timeLeft < OPPONENT_SPEECH_FADE_OUT_MS ? Math.max(0, timeLeft / OPPONENT_SPEECH_FADE_OUT_MS) : 1;
@@ -10849,11 +12138,11 @@ function drawSidePanel(side, rect, isAi, frameNow) {
   drawPileButtonFace(drawPileButton, "牌库", side.drawPile.length, pileStroke);
   drawPileButtonFace(discardPileButton, "弃牌", side.discardPile.length, pileStroke);
 
-  pileHitAreas.push({ x: drawPileButton.x, y: drawPileButton.y, w: drawPileButton.w, h: drawPileButton.h, side: side, pileType: "draw" });
-  pileHitAreas.push({ x: discardPileButton.x, y: discardPileButton.y, w: discardPileButton.w, h: discardPileButton.h, side: side, pileType: "discard" });
+  pileHitAreas.push({ x: drawPileButton.x, y: drawPileButton.y, w: drawPileButton.w, h: drawPileButton.h, side: side, pileType: "draw", clickSound: true });
+  pileHitAreas.push({ x: discardPileButton.x, y: discardPileButton.y, w: discardPileButton.w, h: discardPileButton.h, side: side, pileType: "discard", clickSound: true });
 
   const cardArea = { x: rect.x + 12, y: rect.y + 64, w: rect.w - 24, h: rect.h - 76 };
-  drawContestCardArea(cardArea, isAi);
+  drawContestCardArea(cardArea, isAi, side.id, frameNow);
   drawQueue(side, cardArea.x + 10, cardArea.y + 12, cardArea.w - 20, cardArea.h - 22, frameNow);
 }
 
@@ -10975,6 +12264,7 @@ function drawContestPanelDecor(rect, isAi) {
 
 function drawPileButtonFace(rect, label, count, strokeColor) {
   const stroke = strokeColor != null ? strokeColor : THEME.cyan;
+  beginButtonPressDraw(rect, true);
   ctx.shadowColor = "transparent";
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
@@ -10986,9 +12276,10 @@ function drawPileButtonFace(rect, label, count, strokeColor) {
   ctx.globalAlpha = 1;
 
   drawCenteredMiddleText(label + " " + count, rect.x + rect.w / 2, rect.y + rect.h / 2 + 0.5, 12, "rgba(244, 247, 255, 0.86)", "bold");
+  endButtonPressDraw();
 }
 
-function drawContestCardArea(rect, isAi) {
+function drawContestCardArea(rect, isAi, sideId, frameNow) {
   const edge = isAi ? "240, 93, 143" : "94, 231, 255";
   ctx.save();
   ctx.shadowColor = "rgba(" + edge + ", 0.18)";
@@ -11005,6 +12296,41 @@ function drawContestCardArea(rect, isAi) {
   ctx.strokeStyle = "rgba(244, 247, 255, 0.1)";
   ctx.lineWidth = 1;
   roundRect(rect.x + 6, rect.y + 6, rect.w - 12, rect.h - 12, 4, false, true);
+  ctx.restore();
+
+  drawQueueBustFlash(rect, sideId, frameNow);
+}
+
+function drawQueueBustFlash(rect, sideId, frameNow) {
+  const flash = sideId ? queueBustFlash[sideId] : null;
+  if (!flash) {
+    return;
+  }
+
+  const now = frameNow != null ? frameNow : Date.now();
+  const elapsed = now - flash.startedAt;
+  if (elapsed < 0 || elapsed >= QUEUE_BUST_FLASH_DURATION) {
+    queueBustFlash[sideId] = null;
+    return;
+  }
+
+  const t = elapsed / QUEUE_BUST_FLASH_DURATION;
+  const pulseAlpha = Math.sin(t * Math.PI);
+  const flicker = 0.72 + 0.28 * Math.sin(t * Math.PI * 7);
+  const alpha = pulseAlpha * flicker;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.shadowColor = "rgba(255, 58, 75, " + (0.42 * alpha) + ")";
+  ctx.shadowBlur = 16 + 12 * alpha;
+  ctx.fillStyle = "rgba(255, 42, 58, " + (0.48 * alpha) + ")";
+  ctx.strokeStyle = "rgba(255, 86, 96, " + (0.48 + 0.42 * alpha) + ")";
+  ctx.lineWidth = 2 + alpha * 2;
+  roundRect(rect.x, rect.y, rect.w, rect.h, 7, true, true);
+
+  ctx.shadowColor = "transparent";
+  ctx.fillStyle = "rgba(255, 221, 191, " + (0.1 * alpha) + ")";
+  roundRect(rect.x + 8, rect.y + 8, rect.w - 16, rect.h - 16, 4, true, false);
   ctx.restore();
 }
 
@@ -11392,15 +12718,13 @@ function drawWinSlotsAtStart(startX, centerY, wins, fillColor, sideKey) {
   }
 }
 
-function drawControls(width, height) {
-  buttons = {};
+function drawControls(width, height, preserveButtons) {
+  if (!preserveButtons) {
+    buttons = {};
+  }
   const controls = getGameplayControlRects(width, height);
 
   if (scene === "playing" && game.matchWinner) {
-    if (game.matchWinner === "ai") {
-      buttons.rematch = controls.full;
-      drawButton(buttons.rematch, "重新开始", THEME.button, "#120613", true);
-    }
     return;
   }
 
@@ -11418,12 +12742,19 @@ function drawControls(width, height) {
 
 function drawBattleActionButton(rect, label, kind, enabled) {
   const isHold = kind === "hold";
-  const edge = isHold ? "75, 214, 199" : "240, 93, 143";
+  const isGold = kind === "gold";
+  const edge = isGold ? "255, 224, 113" : isHold ? "75, 214, 199" : "240, 93, 143";
   const fill = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
-  fill.addColorStop(0, enabled ? (isHold ? "rgba(35, 154, 144, 0.86)" : "rgba(188, 45, 93, 0.9)") : "rgba(40, 44, 60, 0.86)");
-  fill.addColorStop(1, enabled ? (isHold ? "rgba(76, 211, 196, 0.9)" : "rgba(235, 82, 134, 0.92)") : "rgba(31, 35, 49, 0.9)");
+  fill.addColorStop(
+    0,
+    enabled ? (isGold ? "rgba(205, 147, 40, 0.9)" : isHold ? "rgba(35, 154, 144, 0.86)" : "rgba(188, 45, 93, 0.9)") : "rgba(40, 44, 60, 0.86)"
+  );
+  fill.addColorStop(
+    1,
+    enabled ? (isGold ? "rgba(255, 224, 113, 0.92)" : isHold ? "rgba(76, 211, 196, 0.9)" : "rgba(235, 82, 134, 0.92)") : "rgba(31, 35, 49, 0.9)"
+  );
 
-  ctx.save();
+  beginButtonPressDraw(rect, enabled);
   ctx.shadowColor = enabled ? "rgba(" + edge + ", 0.34)" : "rgba(0, 0, 0, 0.35)";
   ctx.shadowBlur = enabled ? 13 : 6;
   ctx.shadowOffsetY = 3;
@@ -11437,7 +12768,7 @@ function drawBattleActionButton(rect, label, kind, enabled) {
   ctx.lineWidth = 1;
   roundRect(rect.x + 6, rect.y + 6, rect.w - 12, rect.h - 12, 4, false, true);
   drawCenteredText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 6, 15, enabled ? "#071018" : "rgba(244, 247, 255, 0.58)", "bold");
-  ctx.restore();
+  endButtonPressDraw();
 }
 
 function getControlRects(width, height) {
@@ -11558,6 +12889,26 @@ function drawPileModal(width, height) {
   modalCardHitAreas = [];
   rewardCardButtonHitAreas = [];
 
+  const stableCardTipUnderlay = modal.type === "cardTip" && modalStack.length > 0;
+  if (stableCardTipUnderlay) {
+    drawModalUnderCardTip(width, height);
+  }
+
+  const anim = getModalAnimationState();
+  if (!modal || anim.alpha <= 0) {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalAlpha *= anim.alpha;
+  ctx.translate(width / 2, height / 2);
+  ctx.scale(anim.scale, anim.scale);
+  ctx.translate(-width / 2, -height / 2);
+  drawModalContent(width, height);
+  ctx.restore();
+}
+
+function drawModalContent(width, height) {
   if (modal.type === "activeEffect") {
     drawActiveEffectModal(width, height);
     return;
@@ -11623,6 +12974,11 @@ function drawPileModal(width, height) {
     return;
   }
 
+  if (modal.type === "retryChallenge") {
+    drawRetryChallengeModal(width, height);
+    return;
+  }
+
   if (modal.type === "routeEvent") {
     drawRouteEventModal(width, height);
     return;
@@ -11649,6 +13005,75 @@ function drawPileModal(width, height) {
   }
 
   drawDeckViewerModal(width, height);
+}
+
+function drawRetryChallengeModal(width, height) {
+  ctx.fillStyle = "rgba(2, 4, 10, 0.78)";
+  ctx.fillRect(0, 0, width, height);
+
+  const panelW = Math.min(width - 36, 360);
+  const panelH = 218;
+  const panel = {
+    x: (width - panelW) / 2,
+    y: Math.max(62, (height - panelH) / 2),
+    w: panelW,
+    h: panelH
+  };
+
+  drawDeckViewerPanel(panel);
+  drawCenteredText("是否再次挑战？", panel.x + panel.w / 2, panel.y + 44, 22, THEME.gold, "bold");
+  const retryRemaining = runState ? Math.max(0, runState.adRetryRemaining || 0) : 0;
+  const canWatchAdRetry = retryRemaining > 0 && !retryChallengeAdPending;
+  drawCenteredText(
+    "剩余看视频复活次数 " + retryRemaining + "/" + AD_RETRY_LIMIT_PER_RUN,
+    panel.x + panel.w / 2,
+    panel.y + 82,
+    14,
+    retryRemaining > 0 ? THEME.text : THEME.danger,
+    "bold"
+  );
+  const buttonW = Math.min(panel.w - 44, 260);
+  const buttonH = 42;
+  buttons.retryChallengeAd = {
+    x: panel.x + (panel.w - buttonW) / 2,
+    y: panel.y + 108,
+    w: buttonW,
+    h: buttonH
+  };
+  buttons.retryChallengeLeave = {
+    x: panel.x + (panel.w - buttonW) / 2,
+    y: panel.y + 160,
+    w: buttonW,
+    h: buttonH
+  };
+
+  drawAdRetryButton(
+    buttons.retryChallengeAd,
+    retryChallengeAdPending ? "广告播放中" : retryRemaining > 0 ? "观看广告" : "复活次数已用完",
+    canWatchAdRetry
+  );
+  drawButton(buttons.retryChallengeLeave, "遗憾离场", THEME.buttonStop, "#061d1b", true);
+}
+
+function drawAdRetryButton(rect, label, enabled) {
+  drawButton(rect, label, THEME.button, "#120613", enabled);
+
+  const iconSize = Math.min(18, rect.h * 0.42);
+  const iconX = rect.x + Math.max(20, rect.w * 0.22);
+  const iconY = rect.y + rect.h / 2;
+
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = enabled ? "#071018" : "rgba(244, 247, 255, 0.54)";
+  ctx.fillStyle = enabled ? "#071018" : "rgba(244, 247, 255, 0.54)";
+  roundRect(iconX - iconSize * 0.52, iconY - iconSize * 0.36, iconSize * 1.04, iconSize * 0.72, 3, false, true);
+  ctx.beginPath();
+  ctx.moveTo(iconX - iconSize * 0.12, iconY - iconSize * 0.2);
+  ctx.lineTo(iconX + iconSize * 0.24, iconY);
+  ctx.lineTo(iconX - iconSize * 0.12, iconY + iconSize * 0.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 function getDeckViewerLayout(width, height) {
@@ -11916,13 +13341,112 @@ function drawBottomPrompt(controls, title, description) {
 }
 
 function drawCardTipModal(width, height) {
-  drawCardTipInfoPanel(width, height, modal.title, modal.card);
+  const hasUnderlay = modalStack.length > 0;
+  drawCardTipInfoPanel(width, height, modal.title, modal.card, hasUnderlay ? 0.36 : 0.82);
   const panel = getEffectModalPanel(width, height);
-  buttons.closeModal = { x: panel.x + panel.w / 2 - 72, y: panel.y + panel.h - 58, w: 144, h: 42 };
+  buttons.closeModal = { x: panel.x + panel.w / 2 - 58, y: panel.y + panel.h - 46, w: 116, h: 34 };
   drawButton(buttons.closeModal, "关闭", THEME.buttonStop, "#061d1b", true);
 }
 
+function drawModalUnderCardTip(width, height) {
+  const underlay = modalStack.length ? modalStack[modalStack.length - 1] : null;
+  if (!underlay || underlay.type === "cardTip") {
+    return false;
+  }
+
+  const tipModal = modal;
+  modal = underlay;
+  ctx.save();
+  drawModalContent(width, height);
+  ctx.restore();
+  modal = tipModal;
+  return true;
+}
+
+function clearRouteEventChoiceButtons() {
+  Object.keys(buttons).forEach(function (key) {
+    if (key.indexOf("routeEventChoice") === 0) {
+      delete buttons[key];
+    }
+  });
+}
+
+function wrapTextForTypewriter(text, maxWidth, size, weight) {
+  ctx.save();
+  ctx.font = (weight || "normal") + " " + size + "px " + UI_FONT;
+  const lines = [];
+  const segments = String(text || "").split("\n");
+  segments.forEach(function (segment, segmentIndex) {
+    let line = "";
+    for (let i = 0; i < segment.length; i += 1) {
+      const next = line + segment[i];
+      if (line && ctx.measureText(next).width > maxWidth) {
+        lines.push(line);
+        line = segment[i];
+      } else {
+        line = next;
+      }
+    }
+    lines.push(line);
+    if (segmentIndex < segments.length - 1) {
+      lines.push("");
+    }
+  });
+  ctx.restore();
+  return lines.length ? lines : [""];
+}
+
+function countTypewriterChars(lines) {
+  return lines.reduce(function (sum, line) {
+    return sum + line.length;
+  }, 0);
+}
+
+function getRouteEventTypewriterDuration(lines) {
+  const chars = countTypewriterChars(lines);
+  return Math.max(0, (Math.max(0, chars - 1) * ROUTE_EVENT_TEXT_CHAR_INTERVAL_MS) + ROUTE_EVENT_TEXT_FADE_MS);
+}
+
+function drawRouteEventTypewriterText(text, x, y, maxWidth, size, lineHeight, color, weight, startedAt) {
+  const lines = wrapTextForTypewriter(text, maxWidth, size, weight);
+  const elapsed = Date.now() - startedAt;
+  let charIndex = 0;
+
+  ctx.save();
+  ctx.font = (weight || "normal") + " " + size + "px " + UI_FONT;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = color;
+
+  lines.forEach(function (line, lineIndex) {
+    let cursorX = x;
+    const lineY = y + lineIndex * lineHeight;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      const progress = clamp((elapsed - charIndex * ROUTE_EVENT_TEXT_CHAR_INTERVAL_MS) / ROUTE_EVENT_TEXT_FADE_MS, 0, 1);
+      if (progress > 0) {
+        ctx.globalAlpha = progress;
+        ctx.fillText(ch, cursorX, lineY);
+      }
+      cursorX += ctx.measureText(ch).width;
+      charIndex += 1;
+    }
+  });
+
+  ctx.restore();
+  return {
+    lines: lines,
+    duration: getRouteEventTypewriterDuration(lines),
+    complete: elapsed >= getRouteEventTypewriterDuration(lines)
+  };
+}
+
 function drawRouteEventModal(width, height) {
+  if (!modal.openedAt) {
+    modal.openedAt = Date.now();
+  }
+  clearRouteEventChoiceButtons();
+
   ctx.fillStyle = "rgba(4, 6, 12, 0.84)";
   ctx.fillRect(0, 0, width, height);
 
@@ -11938,7 +13462,17 @@ function drawRouteEventModal(width, height) {
   drawPanelRim(panel, THEME.panelEdgeCool);
 
   drawCenteredText(modal.title || "事件", panel.x + panel.w / 2, panel.y + 38, 21, THEME.gold, "bold");
-  drawWrappedText(modal.description || "", panel.x + 22, panel.y + 72, panel.w - 44, 14, 20, THEME.text, "normal");
+  const typewriter = drawRouteEventTypewriterText(
+    modal.description || "",
+    panel.x + 22,
+    panel.y + 72,
+    panel.w - 44,
+    14,
+    20,
+    THEME.text,
+    "normal",
+    modal.openedAt
+  );
 
   const choices = modal.choices || [];
   const choicePadX = 34;
@@ -11955,12 +13489,23 @@ function drawRouteEventModal(width, height) {
       h: choiceH
     };
     const enabled = canChooseRouteEventOption(choice);
-    buttons["routeEventChoice" + index] = rect;
+    const choiceStart =
+      modal.openedAt +
+      typewriter.duration +
+      ROUTE_EVENT_CHOICES_DELAY_MS +
+      index * ROUTE_EVENT_CHOICE_STAGGER_MS;
+    const choiceAlpha = clamp((Date.now() - choiceStart) / ROUTE_EVENT_CHOICE_FADE_MS, 0, 1);
+    if (choiceAlpha <= 0) {
+      return;
+    }
+    if (choiceAlpha >= 1) {
+      buttons["routeEventChoice" + index] = rect;
+    }
     const textX = rect.x + choiceTextPadX;
     const textW = rect.w - choiceTextPadX * 2;
 
-    ctx.save();
-    ctx.globalAlpha = enabled ? 1 : 0.52;
+    beginButtonPressDraw(rect, enabled);
+    ctx.globalAlpha = choiceAlpha * (enabled ? 1 : 0.52);
     drawPanel(rect, enabled ? "rgba(13, 20, 35, 0.96)" : "rgba(34, 37, 48, 0.92)", { cornerRadius: 7, glowBrightness: 0.65 });
     drawPanelRim(rect, enabled ? THEME.button : "rgba(143, 155, 181, 0.4)", { cornerRadius: 6, glowBrightness: 0.5 });
     ctx.textAlign = "left";
@@ -11969,7 +13514,7 @@ function drawRouteEventModal(width, height) {
     if (!enabled) {
       drawText(getRouteEventOptionDisabledReason(choice), rect.x + rect.w - 92, rect.y + 25, 12, THEME.danger, "bold");
     }
-    ctx.restore();
+    endButtonPressDraw();
   });
 }
 
@@ -12087,8 +13632,9 @@ function drawEffectInfoPanel(width, height, title, description) {
   drawWrappedText(description, panel.x + 24, panel.y + 72, panel.w - 48, 15, 20, THEME.muted, "normal");
 }
 
-function drawCardTipInfoPanel(width, height, title, card) {
-  ctx.fillStyle = "rgba(4, 6, 12, 0.82)";
+function drawCardTipInfoPanel(width, height, title, card, overlayAlpha) {
+  const alpha = typeof overlayAlpha === "number" ? overlayAlpha : 0.82;
+  ctx.fillStyle = "rgba(4, 6, 12, " + alpha + ")";
   ctx.fillRect(0, 0, width, height);
 
   const panel = getEffectModalPanel(width, height);
@@ -12517,9 +14063,15 @@ function drawPanelRim(rect, color, options) {
 }
 
 function drawButton(rect, label, color, textColor, enabled) {
+  if (modal && modal.type === "cardTip" && rect === buttons.closeModal) {
+    drawBattleActionButton(rect, "关闭", "hold", enabled);
+    return;
+  }
+
   const border = getBattleBorderOptions({ lineWidth: 2, cornerRadius: 8, glowBrightness: 1 });
   const battleButtonGlow =
     enabled && (scene === "playing" || scene === "backstage" || scene === "title");
+  beginButtonPressDraw(rect, enabled);
   ctx.shadowColor = battleButtonGlow ? color : "rgba(0, 0, 0, 0.4)";
   ctx.shadowBlur = 7 * border.glowBrightness;
   ctx.shadowOffsetY = 3;
@@ -12534,6 +14086,7 @@ function drawButton(rect, label, color, textColor, enabled) {
   ctx.lineWidth = Math.max(0.5, border.lineWidth * 0.5);
   roundRect(rect.x + 5, rect.y + 5, rect.w - 10, rect.h - 10, Math.max(0, border.cornerRadius - 3), false, true);
   drawCenteredText(label, rect.x + rect.w / 2, rect.y + rect.h / 2 + 6, 15, textColor, "bold");
+  endButtonPressDraw();
 }
 
 function roundRect(x, y, w, h, radius, fill, stroke) {
@@ -12883,6 +14436,11 @@ function syncTestWinOverlayVisibility() {
     return;
   }
 
+  if (!TEST_WIN_BUTTON_VISIBLE) {
+    testWinOverlayEl.hidden = true;
+    return;
+  }
+
   const visible =
     scene === "playing" &&
     game &&
@@ -12896,6 +14454,12 @@ function syncTestWinOverlayVisibility() {
 
 function syncTestBattleOverlayVisibility() {
   if (!testBattleToggleEl) {
+    return;
+  }
+
+  if (!TEST_BATTLE_BUTTON_VISIBLE) {
+    testBattleToggleEl.hidden = true;
+    closeTestBattlePanel();
     return;
   }
 
@@ -12921,8 +14485,8 @@ function draw() {
     drawBackstage(size.width, size.height);
   } else if (scene === "routeMap") {
     drawRouteMap(size.width, size.height);
-  } else if (scene === "runVictory") {
-    drawRunVictory(size.width, size.height);
+  } else if (scene === "runSettlement") {
+    drawRunSettlement(size.width, size.height);
   } else if (scene === "opponentSelect") {
     drawOpponentSelect(size.width, size.height);
   } else {
@@ -12933,6 +14497,7 @@ function draw() {
   drawOpponentSpeechBubbleOverlay(size.width, size.height);
   drawPileModal(size.width, size.height);
   drawTips(size.width, size.height);
+  drawSceneTransition(size.width, size.height, frameNow);
 
   syncTestWinOverlayVisibility();
   syncTestBattleOverlayVisibility();
@@ -12942,19 +14507,33 @@ function draw() {
 }
 
 function startGameShell() {
+  bindDomButtonClickSounds();
+  bindDomButtonPressEffects();
+  if (window.adManager && typeof window.adManager.init === "function") {
+    window.adManager.init();
+  }
   initTestWinOverlay();
   initTestBattleOverlay();
-  tap.onTouchStart(handleTouch);
+  tap.onTouchStart(handleTouchStart);
   if (typeof tap.onTouchMove === "function") {
     tap.onTouchMove(handlePointerMove);
   }
   if (typeof tap.onTouchEnd === "function") {
-    tap.onTouchEnd(handlePointerEnd);
+    tap.onTouchEnd(handleTouchEnd);
+  }
+  if (typeof tap.onTouchCancel === "function") {
+    tap.onTouchCancel(handleTouchCancel);
   }
   if (canvas && canvas.addEventListener) {
-    canvas.addEventListener("pointermove", handlePointerMove);
-    canvas.addEventListener("pointerup", handlePointerEnd);
-    canvas.addEventListener("pointercancel", handlePointerEnd);
+    if (typeof tap.onTouchMove !== "function") {
+      canvas.addEventListener("pointermove", handlePointerMove);
+    }
+    if (typeof tap.onTouchEnd !== "function") {
+      canvas.addEventListener("pointerup", handleTouchEnd);
+    }
+    if (typeof tap.onTouchCancel !== "function") {
+      canvas.addEventListener("pointercancel", handleTouchCancel);
+    }
     canvas.addEventListener("wheel", handleWheel, { passive: false });
   }
   draw();

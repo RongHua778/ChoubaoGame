@@ -10,6 +10,9 @@
   var touchMoveHandlers = [];
   var touchEndHandlers = [];
   var touchCancelHandlers = [];
+  var rewardedVideoLoadHandlers = [];
+  var rewardedVideoCloseHandlers = [];
+  var rewardedVideoErrorHandlers = [];
 
   function syncCanvasSize() {
     if (!canvas) {
@@ -82,6 +85,36 @@
 
     onTouchCancel: function (handler) {
       touchCancelHandlers.push(handler);
+    },
+
+    createRewardedVideoAd: function () {
+      return {
+        load: function () {
+          window.setTimeout(function () {
+            rewardedVideoLoadHandlers.forEach(function (handler) {
+              handler();
+            });
+          }, 120);
+          return Promise.resolve();
+        },
+        show: function () {
+          window.setTimeout(function () {
+            rewardedVideoCloseHandlers.forEach(function (handler) {
+              handler({ isEnded: true });
+            });
+          }, 500);
+        },
+        onLoad: function (handler) {
+          rewardedVideoLoadHandlers.push(handler);
+        },
+        onClose: function (handler) {
+          rewardedVideoCloseHandlers.push(handler);
+        },
+        onError: function (handler) {
+          rewardedVideoErrorHandlers.push(handler);
+        },
+        destroy: function () {}
+      };
     }
   });
 })();

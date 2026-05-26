@@ -336,7 +336,7 @@
     </style>
   </head>
   <body>
-    <button class="layout-debug-toggle" type="button" id="layoutDebugToggle" aria-controls="layoutDebugPanel" aria-expanded="false">调</button>
+    <button class="layout-debug-toggle" type="button" id="layoutDebugToggle" hidden aria-controls="layoutDebugPanel" aria-expanded="false">调</button>
     <button class="layout-test-win-toggle" type="button" id="layoutTestWinToggle" hidden aria-label="测试胜利">胜</button>
     <button class="layout-test-battle-toggle" type="button" id="layoutTestBattleToggle" hidden aria-controls="layoutTestBattlePanel" aria-expanded="false" aria-label="测试对战">战</button>
     <div class="layout-test-battle-panel" id="layoutTestBattlePanel" hidden>
@@ -670,7 +670,7 @@
             startButtonHeight: 0,
             startButtonWidth: 0,
             startButtonYRatio: -1,
-            startButtonYOffset: 0,
+            startButtonYOffset: -40,
             startButtonCenterXRatio: -1,
             fallbackLogoTextWhenNoImage: "",
             showBootstrapLoadingHint: 0,
@@ -749,6 +749,10 @@
               if (saved.pointRadius === 6.8) {
                 saved.pointRadius = defaults.threshold.pointRadius;
               }
+            } else if (group === "titleMenu") {
+              if (saved.startButtonYOffset === 0) {
+                saved.startButtonYOffset = defaults.titleMenu.startButtonYOffset;
+              }
             } else if (group === "center") {
               if (saved.aiColumnXRatio === 0.1) {
                 saved.aiColumnXRatio = defaults.center.aiColumnXRatio;
@@ -795,6 +799,7 @@
       })();
     </script>
     <script src="./js/dev-tap-mock.js"></script>
+    <script src="./js/AdManager.js"></script>
     <script src="./game.js"></script>
     <script>
       (function () {
@@ -989,7 +994,11 @@
           }, 700);
         });
 
-        setPanelOpen(loadPanelOpen());
+        if (toggleButton.hidden) {
+          setPanelOpen(false);
+        } else {
+          setPanelOpen(loadPanelOpen());
+        }
         activatePage("titleMenu");
         syncControls();
       })();
